@@ -1,34 +1,100 @@
 import pandas as pd
 import json
 from typing import List, Dict
-import logging
 
-# Add the AVAILABLE_MODELS dictionary
-AVAILABLE_MODELS = {
-    "Ministral 8B": "mistralai/ministral-8b",
-    "Ministral 3B": "mistralai/ministral-3b",
-    "Qwen2.5 7B Instruct": "qwen/qwen-2.5-7b-instruct",
-    "Nvidia: Llama 3.1 Nemotron 70B Instruct": "nvidia/llama-3.1-nemotron-70b-instruct",
-    "Google: Gemini 1.5 Flash-8B": "google/gemini-flash-1.5-8b",
-    "Mistral Large": "mistralai/mistral-large",
-    "OpenAI: GPT-4 Turbo Preview": "openai/gpt-4-turbo-preview",
-    "Anthropic: Claude 3 Opus": "anthropic/claude-3-opus",
-    "Anthropic: Claude 3 Sonnet": "anthropic/claude-3-sonnet",
-    "Anthropic: Claude 3 Haiku": "anthropic/claude-3-haiku",
-}
+def process_csv(df: pd.DataFrame, has_image_url: bool, upload_option: str) -> List[Dict]:
+    if upload_option == "Option 1: [Letter, Prompt Name, Category, Prompt Text]":
+        column_mapping = {
+            "Letter": "Letter",
+            "Prompt Name": "PromptName",
+            "Category": "Categories",
+            "Prompt Text": "PromptText",
+        }
+        required_columns = ["Letter", "PromptName", "Categories", "PromptText"]
+    else:
+        column_mapping = {
+            "Letter": "Letter",
+            "Persona Name": "PersonaName",
+            "Category": "Categories",
+            "ImageURL": "ImageURL",
+            "Prompt Text": "PromptText",
+        }
+        required_columns = ["Letter", "PersonaName", "Categories", "ImageURL", "PromptText"]
+
+    # Rename columns based on mapping
+    df = df.rename(columns=column_mapping)
+
+    # Ensure all required columns are present
+    for col in required_columns:
+        if col not in df.columns:
+            df[col] = ""  # Add missing columns with empty strings
+
+    # Data Validation
+    required_fields_for_validation = ["Letter", "Categories", "PromptText"]
+    if has_image_url:
+        required_fields_for_validation.extend(["PersonaName", "ImageURL"])
+    else:
+        required_fields_for_validation.append("PromptName")
+
+    # Check for missing values in required fields
+    if df[required_fields_for_validation].isnull().values.any():
+        missing = df[required_fields_for_validation].isnull().sum()
+        raise ValueError(f"Missing values in required columns: {missing}")
+
+    # Convert DataFrame to list of dictionaries
+    return df[required_columns].to_dict("records")
+
+def process_json(data: List[Dict], has_image_url: bool, upload_option: str) -> List[Dict]:
+    if upload_option == "Option 1: [Letter, Prompt Name, Category, Prompt Text]":
+        required_keys = ["Letter", "PromptName", "Categories", "PromptText"]
+        key_mapping = {
+            "Prompt Name": "PromptName",
+            "Category": "Categories",
+            "Prompt Text": "PromptText",
+        }
+    else:
+        required_keys = ["Letter", "PersonaName", "Categories", "ImageURL", "PromptText"]
+        key_mapping = {
+            "Persona Name": "PersonaName",
+            "Category": "Categories",
+            "ImageURL": "ImageURL",
+            "Prompt Text": "PromptText",
+        }
+
+    processed_data = []
+    for item in data:
+        processed_item = {}
+        for key, value in item.items():
+            mapped_key = key_mapping.get(key, key)
+            if mapped_key in required_keys:
+                processed_item[mapped_key] = value
+
+        for key in required_keys:
+            if key not in processed_item:
+                processed_item[key] = ""
+
+        processed_data.append(processed_item)
+
+    # Data Validation
+    required_keys_for_validation = ["Letter", "Categories", "PromptText"]
+    if has_image_url:
+        required_keys_for_validation.extend(["PersonaName", "ImageURL"])
+    else:
+        required_keys_for_validation.append("PromptName")
+
+    for item in processed_data:
+        if any(value == "" for key, value in item.items() if key in required_keys_for_validation):
+            raise ValueError(f"Missing values in required keys for item: {item}")
+
+    return processed_data
 
 def generate_html_content(data: List[Dict], has_image_url: bool, theme: str, header_title: str) -> str:
     """Generate HTML content from the processed data."""
     # Precompute variables for the HTML content
     css_styles = get_css_styles()
-
-    # Group prompts by their starting letter
-    prompts_by_letter = {}
-    for item in data:
-        letter = item['Letter'].upper()
-        if letter not in prompts_by_letter:
-            prompts_by_letter[letter] = []
-        prompts_by_letter[letter].append(item)
+    search_column_0 = 'Persona Name' if has_image_url else 'Letter'
+    search_column_2 = 2  # Categories/Tags column
+    search_column_3 = 3  # Prompt Text column
 
     # Start building the HTML content using f-strings
     html_content = f"""
@@ -56,108 +122,209 @@ def generate_html_content(data: List[Dict], has_image_url: bool, theme: str, hea
         <!-- Advanced Search -->
         <select id="searchColumn" class="form-control">
             <option value="all">All Columns</option>
-            <option value="0">Letter</option>
-            <option value="1">Prompt Name</option>
-            <option value="2">Category</option>
-            <option value="3">Prompt Text</option>
+            <option value="0">{search_column_0}</option>
+            <option value="{search_column_2}">Categories/Tags</option>
+            <option value="{search_column_3}">Prompt Text</option>
         </select>
     </div>
-    <!-- Alphabet Menu -->
-    <div id="alphabet-menu">
-        {' '.join([f'<a href="#section-{letter}">{letter}</a>' for letter in sorted(prompts_by_letter.keys())])}
-    </div>
-    <!-- Content Sections -->
-    <div id="content">
-    """
+    <!-- Navigation -->
+    <nav id="navigation">
+        <!-- Alphabet Navigation -->
+"""
+    # Generate alphabetical navigation with letters that have entries
+    letters = sorted(set(item['Letter'].upper() for item in data if item['Letter']))
+    for letter in letters:
+        html_content += f'<a href="#section-{letter}">{letter}</a> '
 
-    # Generate content for each letter
-    for letter in sorted(prompts_by_letter.keys()):
-        html_content += f"""
-        <div id="section-{letter}">
-            <h2>{letter}</h2>
-            <table class="table table-bordered table-hover">
-                <thead>
-                    <tr>
-                        <th class="sortable" onclick="sortTable(this, 0)">Letter</th>
-                        <th class="sortable" onclick="sortTable(this, 1)">Prompt Name</th>
-                        <th class="sortable" onclick="sortTable(this, 2)">Category</th>
-                        <th class="sortable" onclick="sortTable(this, 3)">Prompt Text</th>
-                        <th>Copy Prompt</th>
-                    </tr>
-                </thead>
-                <tbody>
-        """
+    # Categories Button
+    html_content += '<button type="button" data-toggle="modal" data-target="#categoriesModal">Categories</button>\n'
+    html_content += '</nav>\n'
 
-        for item in prompts_by_letter[letter]:
-            prompt_name = item.get('PromptName', '')
-            category = item.get('Category', '')
+    # Start Content Sections
+    html_content += '<!-- Content Sections -->\n<div id="content">\n'
+
+    # Group data by letters
+    data_by_letter = {}
+    for item in data:
+        letter = item['Letter'].upper()
+        if letter not in data_by_letter:
+            data_by_letter[letter] = []
+        data_by_letter[letter].append(item)
+
+    # Generate content for each letter with entries
+    entry_id = 1  # For unique IDs
+    categories_dict = {}  # For categories modal
+
+    for letter in letters:
+        html_content += f'<div class="letter-section" id="section-{letter}"><h2>{letter}</h2>\n'
+        html_content += '''
+    <table class="table table-bordered table-hover">
+        <thead>
+            <tr>
+    '''
+        # Determine headers based on the upload option
+        if has_image_url:
+            headers = ['Persona Name', 'Image', 'Categories/Tags', 'Prompt Text', 'Copy Prompt']
+        else:
+            headers = ['Letter', 'Prompt Name', 'Categories/Tags', 'Prompt Text', 'Copy Prompt']
+        for idx, column in enumerate(headers):
+            if column in ['Persona Name', 'Prompt Name', 'Prompt Text']:
+                html_content += f'<th class="sortable" onclick="sortTable(this, {idx})">{column}</th>\n'
+            else:
+                html_content += f'<th>{column}</th>\n'
+        html_content += '''
+            </tr>
+        </thead>
+        <tbody>
+    '''
+
+        for item in data_by_letter[letter]:
+            if has_image_url:
+                name_field = item.get('PersonaName', '')
+                letter_field = item.get('Letter', '')
+            else:
+                name_field = item.get('PromptName', '')
+                letter_field = item.get('Letter', '')
+
+            image_url = item.get('ImageURL', '') if has_image_url else ''
+            categories = item.get('Categories', '')
             prompt_text = item.get('PromptText', '').replace('\n', '<br>')
+            categories_list = [cat.strip() for cat in categories.split(',') if cat.strip()]
+            # Update categories_dict
+            for category in categories_list:
+                if category not in categories_dict:
+                    categories_dict[category] = []
+                categories_dict[category].append({'id': f'entry-{entry_id}', 'name': name_field})
 
             # Sanitize prompt_text
             prompt_text = prompt_text.replace("fucked", "****")
 
+            html_content += f'''
+            <tr id="entry-{entry_id}">
+            '''
+            if not has_image_url:
+                html_content += f'    <td>{letter_field}</td>\n'
+            html_content += f'    <td>{name_field}</td>\n'
+            if has_image_url:
+                if image_url:
+                    html_content += f'    <td><img src="{image_url}" alt="{name_field}"></td>\n'
+                else:
+                    html_content += '    <td></td>\n'
+            html_content += '    <td class="category-tags">'
+            for category in categories_list:
+                html_content += f'<a href="#" onclick="showEntriesByCategory(`{category}`);">{category}</a>'
+                if category != categories_list[-1]:
+                    html_content += ', '
+            html_content += '</td>\n'
+            html_content += f'    <td>{prompt_text}</td>\n'
             # Adjusted copyText function call to handle special characters
-            sanitized_prompt_text = prompt_text.replace("`", "\\`").replace("\\", "\\\\").replace("\n", "\\n")
+            sanitized_prompt_text = item.get("PromptText", "").replace("`", "\\`").replace("\\", "\\\\").replace("\n", "\\n").replace("fucked", "****")
+            html_content += f'    <td><button class="btn btn-primary copy-button" onclick="copyText(`{sanitized_prompt_text}`)">Copy</button></td>\n'
+            html_content += '</tr>\n'
 
-            html_content += f"""
-                    <tr>
-                        <td>{letter}</td>
-                        <td>{prompt_name}</td>
-                        <td>{category}</td>
-                        <td>{prompt_text}</td>
-                        <td><button class="btn btn-primary copy-button" onclick="copyText(`{sanitized_prompt_text}`)">Copy</button></td>
-                    </tr>
-            """
+            entry_id += 1
 
-        html_content += """
-                </tbody>
-            </table>
+        html_content += '''
+        </tbody>
+    </table>
+    '''
+        html_content += '</div>'
+
+    # Categories Modal
+    html_content += r'''
+    <!-- Categories Modal -->
+    <div class="modal fade" id="categoriesModal" tabindex="-1" role="dialog" aria-labelledby="categoriesModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-scrollable" role="document">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title"><span id="modalTitle">Categories</span></h5>
+            <button type="button" class="close" data-dismiss="modal" aria-label="Close" onclick="backToCategories()">
+              <span aria-hidden="true">&times;</span>
+            </button>
+          </div>
+          <div class="modal-body">
+            <ul class="category-list" id="categoryList">
+    '''
+    # List of Categories
+    for category in sorted(categories_dict.keys()):
+        html_content += f'<li><a href="#" onclick="showEntriesByCategory(`{category}`);">{category}</a></li>'
+    html_content += '''
+            </ul>
+            <!-- Entries by Category -->
+            <div id="entriesByCategory" style="display:none;">
+              <h5 id="selectedCategory"></h5>
+              <ul class="entry-list" id="entryList">
+              </ul>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" onclick="backToCategories()">Back</button>
+            <button type="button" class="btn btn-secondary" data-dismiss="modal" onclick="backToCategories()">Close</button>
+          </div>
         </div>
-        """
-
-    # Close the content div and add scripts
-    html_content += """
+      </div>
     </div>
-    <!-- Include jQuery and Bootstrap JS -->
-    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.min.js"></script>
-    <script>
-        function copyText(text) {
-            navigator.clipboard.writeText(text)
-                .then(() => alert('Text copied!'))
-                .catch(err => console.error('Error copying text: ', err));
-        }
+    <!-- End of Categories Modal -->
+    '''
 
-        function searchTable() {
-            var input, filter, tables, tr, td, i, txtValue;
-            input = document.getElementById("searchInput");
-            filter = input.value.toUpperCase();
-            var columnSelect = document.getElementById("searchColumn");
-            var columnIndex = columnSelect.value === "all" ? -1 : parseInt(columnSelect.value);
+    # Include scripts
+    html_content += '''
+</div>
+<!-- Include jQuery and Bootstrap JS -->
+<script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.min.js"></script>
+<script>
+    // Data structures for categories and entries
+    var categories = {};
+'''
+    # Generate JavaScript categories object
+    categories_js = 'categories = {\n'
+    for category, entries in categories_dict.items():
+        categories_js += f'    "{category}": [\n'
+        for idx, entry in enumerate(entries):
+            entry_id = entry['id']
+            entry_name = entry['name'].replace('"', '\\"')
+            categories_js += f'        {{"id": "{entry_id}", "name": "{entry_name}"}},\n'
+        categories_js += '    ],\n'
+    categories_js += '};\n'
+    html_content += categories_js
 
-            tables = document.querySelectorAll("#content table");
-            tables.forEach(function(table) {
-                tr = table.getElementsByTagName("tr");
+    # Add JavaScript functions
+    html_content += '''
+    function copyText(text) {
+        navigator.clipboard.writeText(text)
+            .then(() => alert('Text copied!'))
+            .catch(err => console.error('Error copying text: ', err));
+    }
 
+    function searchTable() {
+        var input, filter, tableContainers, tables, tr, td, i, txtValue;
+        input = document.getElementById("searchInput");
+        filter = input.value.toUpperCase();
+        var columnSelect = document.getElementById("searchColumn");
+        var columnIndex = columnSelect.value;
+
+        tableContainers = document.querySelectorAll(".letter-section");
+        tableContainers.forEach(function(container) {
+            var tables = container.getElementsByTagName("table");
+            if (tables.length > 0) {
+                var tr = tables[0].getElementsByTagName("tr");
                 for (i = 1; i < tr.length; i++) {
                     tr[i].style.display = "none";
-                    if (columnIndex === -1) {
-                        // Search all columns
-                        var found = false;
-                        td = tr[i].getElementsByTagName("td");
-                        for (var j = 0; j < td.length - 1; j++) { // Exclude the Copy button column
-                            if (td[j]) {
-                                txtValue = td[j].textContent || td[j].innerText;
+                    var tdArray = tr[i].getElementsByTagName("td");
+                    if (columnIndex === "all") {
+                        for (var j = 0; j < tdArray.length; j++) {
+                            td = tdArray[j];
+                            if (td) {
+                                txtValue = td.textContent || td.innerText;
                                 if (txtValue.toUpperCase().indexOf(filter) > -1) {
-                                    found = true;
+                                    tr[i].style.display = "";
                                     break;
                                 }
                             }
                         }
-                        if (found) tr[i].style.display = "";
                     } else {
-                        // Search specific column
-                        td = tr[i].getElementsByTagName("td")[columnIndex];
+                        td = tdArray[columnIndex];
                         if (td) {
                             txtValue = td.textContent || td.innerText;
                             if (txtValue.toUpperCase().indexOf(filter) > -1) {
@@ -166,73 +333,129 @@ def generate_html_content(data: List[Dict], has_image_url: bool, theme: str, hea
                         }
                     }
                 }
-            });
-        }
-
-        function sortTable(header, columnIndex) {
-            var table, rows, switching, i, x, y, shouldSwitch, dir, switchcount = 0;
-            table = header.closest('table');
-            switching = true;
-            dir = "asc";
-
-            while (switching) {
-                switching = false;
-                rows = table.rows;
-
-                for (i = 1; i < (rows.length - 1); i++) {
-                    shouldSwitch = false;
-                    x = rows[i].getElementsByTagName("TD")[columnIndex];
-                    y = rows[i + 1].getElementsByTagName("TD")[columnIndex];
-
-                    if (dir == "asc") {
-                        if (x.innerHTML.toLowerCase() > y.innerHTML.toLowerCase()) {
-                            shouldSwitch = true;
-                            break;
-                        }
-                    } else if (dir == "desc") {
-                        if (x.innerHTML.toLowerCase() < y.innerHTML.toLowerCase()) {
-                            shouldSwitch = true;
-                            break;
-                        }
-                    }
-                }
-
-                if (shouldSwitch) {
-                    rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
-                    switching = true;
-                    switchcount++;
-                } else {
-                    if (switchcount == 0 && dir == "asc") {
-                        dir = "desc";
-                        switching = true;
-                    }
-                }
             }
+        });
+    }
 
-            // Update sort direction indicators
-            var headers = table.querySelectorAll('th');
-            headers.forEach(h => h.classList.remove('asc', 'desc'));
-            header.classList.add(dir);
-        }
-    </script>
+    function sortTable(header, columnIndex) {
+        var table = header.closest('table');
+        var tbody = table.querySelector('tbody');
+        var rows = Array.from(tbody.rows);
+        var ascending = header.classList.contains('asc');
+        rows.sort(function(a, b) {
+            var aText = a.cells[columnIndex].innerText.trim().toUpperCase();
+            var bText = b.cells[columnIndex].innerText.trim().toUpperCase();
+            if (aText < bText) return ascending ? -1 : 1;
+            if (aText > bText) return ascending ? 1 : -1;
+            return 0;
+        });
+        rows.forEach(function(row) {
+            tbody.appendChild(row);
+        });
+        // Toggle sort direction
+        header.classList.toggle('asc', !ascending);
+        header.classList.toggle('desc', ascending);
+    }
+
+    function showEntriesByCategory(category) {
+        document.getElementById('entriesByCategory').style.display = 'block';
+        document.getElementById('selectedCategory').innerText = category;
+        var entryList = document.getElementById('entryList');
+        entryList.innerHTML = '';
+        var entries = categories[category];
+        entries.forEach(function(entry) {
+            var li = document.createElement('li');
+            var a = document.createElement('a');
+            a.href = "#";
+            a.innerText = entry.name;
+            a.addEventListener('click', function(e) {
+                e.preventDefault();
+                $('#categoriesModal').modal('hide');
+                // Wait for the modal to fully hide, then scroll
+                $('#categoriesModal').on('hidden.bs.modal', function () {
+                    var target = document.getElementById(entry.id);
+                    if (target) {
+                        target.scrollIntoView({ behavior: 'smooth' });
+                    }
+                    // Remove the event listener to prevent it from firing multiple times
+                    $('#categoriesModal').off('hidden.bs.modal');
+                });
+            });
+            li.appendChild(a);
+            entryList.appendChild(li);
+        });
+        document.getElementById('categoryList').style.display = 'none';
+        document.getElementById('modalTitle').innerText = 'Entries in ' + category;
+        $('#categoriesModal').modal('show'); // Ensure the modal is shown
+    }
+
+    function backToCategories() {
+        document.getElementById('entriesByCategory').style.display = 'none';
+        document.getElementById('categoryList').style.display = 'block';
+        document.getElementById('modalTitle').innerText = 'Categories';
+    }
+</script>
 </body>
 </html>
-    """
+'''
     return html_content
 
 def get_css_styles() -> str:
-    """Return CSS styles for the HTML content."""
-    return """
+    """Return CSS styles as per the provided HTML."""
+    css_styles = '''
     body {
         font-family: 'Roboto', sans-serif;
         padding: 20px;
         background-color: #f0f2f5;
         color: #333;
     }
-    .main-heading {
-        text-align: center;
-        margin-bottom: 30px;
-        color: #007bff;
+    #navigation {
+        display: flex;
+        justify-content: center;
+        flex-wrap: wrap;
+        margin-bottom: 20px;
+    }
+    #navigation a, #navigation button {
+        margin: 5px;
+        text-decoration: none;
+        font-weight: bold;
+        color: #ffffff;
+        background-color: #007bff;
+        padding: 10px 15px;
+        border: none;
+        border-radius: 5px;
+        display: inline-block;
+        transition: background-color 0.3s;
+    }
+    #navigation a:hover:not(.disabled), #navigation button:hover {
+        background-color: #0056b3;
+        text-decoration: none;
+    }
+    .letter-section {
+        margin-bottom: 40px;
+    }
+    .copy-button {
+        margin-top: 5px;
+    }
+    table {
+        table-layout: fixed;
+        word-wrap: break-word;
+        background-color: #ffffff;
+    }
+    th, td {
+        vertical-align: middle !important;
+    }
+    th {
+        background-color: #007bff;
+        color: #ffffff;
+        cursor: pointer;
+    }
+    th.sortable:hover {
+        background-color: #0056b3;
+    }
+    img {
+        max-width: 100%;
+        height: auto;
     }
     .search-bar {
         margin-bottom: 20px;
@@ -245,58 +468,58 @@ def get_css_styles() -> str:
     .search-bar select {
         width: 200px;
     }
-    #alphabet-menu {
-        display: flex;
-        justify-content: center;
-        flex-wrap: wrap;
-        margin-bottom: 20px;
-    }
-    #alphabet-menu a {
-        margin: 5px;
-        text-decoration: none;
-        font-weight: bold;
+    .main-heading {
+        text-align: center;
+        margin-bottom: 30px;
         color: #007bff;
     }
-    table {
-        background-color: #ffffff;
-        border-collapse: collapse;
-        width: 100%;
-        margin-bottom: 30px;
-    }
-    th, td {
-        border: 1px solid #ddd;
-        padding: 12px;
-        text-align: left;
-    }
-    th {
-        background-color: #007bff;
-        color: white;
+    /* Additional Styling */
+    .category-tags {
+        font-size: 0.9em;
+        color: #007bff;
         cursor: pointer;
     }
-    th:hover {
-        background-color: #0056b3;
+    .category-tags a {
+        color: #007bff;
+        text-decoration: none;
     }
-    th.asc:after {
-        content: ' ▲';
+    .category-tags a:hover {
+        text-decoration: underline;
     }
-    th.desc:after {
-        content: ' ▼';
+    /* Highlight for Search */
+    .highlight {
+        background-color: yellow;
     }
-    tr:nth-child(even) {
-        background-color: #f2f2f2;
+    /* Smooth Scrolling */
+    html {
+        scroll-behavior: smooth;
     }
-    tr:hover {
-        background-color: #ddd;
+    /* Modal Styling */
+    .modal-content {
+        color: #333;
     }
-    .copy-button {
-        padding: 5px 10px;
-        background-color: #28a745;
-        color: white;
-        border: none;
-        border-radius: 4px;
-        cursor: pointer;
+    .category-list, .entry-list {
+        list-style-type: none;
+        padding-left: 0;
     }
-    .copy-button:hover {
-        background-color: #218838;
+    .category-list li, .entry-list li {
+        margin-bottom: 10px;
     }
-    """
+    .category-list a, .entry-list a {
+        color: #007bff;
+        text-decoration: none;
+    }
+    .category-list a:hover, .entry-list a:hover {
+        text-decoration: underline;
+    }
+    '''
+    return css_styles
+
+# Dictionary of available models
+AVAILABLE_MODELS = {
+    "GPT-3.5 Turbo": "openai/gpt-3.5-turbo",
+    "GPT-4": "openai/gpt-4",
+    "Claude 2": "anthropic/claude-2",
+    "PaLM 2 Chat": "google/palm-2-chat-bison",
+    "Llama 2 70B": "meta-llama/llama-2-70b-chat",
+}

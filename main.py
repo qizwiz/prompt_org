@@ -14,7 +14,11 @@ def parse_ai_response(response_text):
     logging.debug(f"Parsing AI response: {response_text}")
     try:
         # Try parsing the entire response as JSON
-        return json.loads(response_text)
+        parsed_data = json.loads(response_text)
+        if isinstance(parsed_data, list):
+            return parsed_data
+        else:
+            raise ValueError("Parsed data is not a list")
     except json.JSONDecodeError:
         logging.debug("Failed to parse entire response as JSON, trying alternative methods")
         # If that fails, try to extract JSON-like structures
