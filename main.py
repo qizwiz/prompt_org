@@ -29,7 +29,7 @@ def main():
             st.warning("Please enter a topic.")
             return
 
-        prompt = f"Generate {num_prompts} unique and creative prompts about {topic}. Each prompt should be engaging and thought-provoking."
+        prompt = f"Generate {num_prompts} unique and creative prompts about {topic}. Each prompt should be engaging and thought-provoking. For each prompt, provide a single letter identifier, a prompt name, and a category. Format the output as a list of JSON objects, each containing 'Letter', 'PromptName', 'Category', and 'PromptText' fields."
 
         try:
             response = requests.post(
@@ -53,15 +53,15 @@ def main():
 
             if "choices" in result and len(result["choices"]) > 0:
                 generated_text = result["choices"][0]["message"]["content"].strip()
-                prompts = [p.strip() for p in generated_text.split("\n") if p.strip()]
-                
-                generated_prompts = []
-                for i, p in enumerate(prompts, 1):
-                    generated_prompts.append({"id": i, "prompt": p})
+                try:
+                    generated_prompts = json.loads(generated_text)
+                except json.JSONDecodeError:
+                    st.error("Failed to parse the generated prompts. Please try again.")
+                    return
 
                 st.subheader("Generated Prompts:")
                 for item in generated_prompts:
-                    st.write(f"{item['id']}. {item['prompt']}")
+                    st.write(f"{item['Letter']}. {item['PromptName']} ({item['Category']}): {item['PromptText']}")
 
                 st.session_state.generated_prompts = generated_prompts
             else:
@@ -69,11 +69,9 @@ def main():
         except requests.exceptions.RequestException as e:
             st.error(f"An error occurred: {str(e)}")
 
-    if 'generated_prompts' in st.session_state and st.session_state.generated_prompts:
-        generated_prompts = st.session_state.generated_prompts
-
+    if st.session_state.generated_prompts:
         st.subheader("Prompt Details")
-        df = pd.DataFrame(generated_prompts)
+        df = pd.DataFrame(st.session_state.generated_prompts)
         st.dataframe(df)
 
         csv = df.to_csv(index=False)
@@ -85,22 +83,20 @@ def main():
         if generate_html:
             try:
                 logging.info("Generate HTML button clicked")
-                logging.info(f"Generating HTML content for {len(generated_prompts)} prompts")
-                logging.debug(f"Generated prompts content: {json.dumps(generated_prompts, indent=2)}")
+                logging.info(f"Generating HTML content for {len(st.session_state.generated_prompts)} prompts")
                 
                 header_title = "Generated Prompts"
                 theme = "light"
-                html_content = generate_html_content(generated_prompts, has_image_url=False, theme=theme, header_title=header_title)
+                html_content = generate_html_content(st.session_state.generated_prompts, has_image_url=False, theme=theme, header_title=header_title)
 
                 logging.info(f"HTML content generated successfully. Length: {len(html_content)}")
-                logging.debug(f"First 200 characters of HTML content: {html_content[:200]}")
 
                 b64 = base64.b64encode(html_content.encode()).decode()
                 href = f'<a href="data:text/html;base64,{b64}" download="{header_title}.html">📥 Download Generated HTML</a>'
                 st.markdown(href, unsafe_allow_html=True)
 
                 st.markdown(f"<h3>Generated HTML Preview:</h3>", unsafe_allow_html=True)
-                st.markdown(html_content, unsafe_allow_html=True)
+                st.components.v1.html(html_content, height=600, scrolling=True)
                 logging.info("HTML content displayed successfully")
             except Exception as e:
                 logging.error(f"Error generating or displaying HTML content: {str(e)}")
