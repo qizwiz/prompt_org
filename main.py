@@ -7,7 +7,7 @@ import os
 import base64
 from utils import generate_html_content
 
-logging.basicConfig(filename='app.log', level=logging.INFO, format='%(asctime)s:%(levelname)s:%(message)s')
+logging.basicConfig(filename='app.log', level=logging.DEBUG, format='%(asctime)s:%(levelname)s:%(message)s')
 
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 
@@ -311,7 +311,7 @@ def generate_name_and_category(subject, prompt_input, prompt_text, model):
             timeout=30
         )
 
-        response.raise_for_status()  # Raise an exception for non-200 status codes
+        response.raise_for_status()
         response_data = response.json()
         ai_response = response_data.get('choices', [{}])[0].get('message', {}).get('content', "").strip()
         logging.info("Received name and category from OpenRouter API.")
@@ -441,15 +441,23 @@ def main():
 
                     generate_html = st.button("🖥️ Generate HTML")
                     if generate_html:
-                        header_title = "Generated Prompts"
-                        theme = "light"
-                        html_content = generate_html_content(generated_prompts, has_image_url=False, theme=theme, header_title=header_title)
+                        try:
+                            logging.info("Generating HTML content")
+                            header_title = "Generated Prompts"
+                            theme = "light"
+                            html_content = generate_html_content(generated_prompts, has_image_url=False, theme=theme, header_title=header_title)
 
-                        b64 = base64.b64encode(html_content.encode()).decode()
-                        href = f'<a href="data:text/html;base64,{b64}" download="{header_title}.html">📥 Download Generated HTML</a>'
-                        st.markdown(href, unsafe_allow_html=True)
+                            logging.info("HTML content generated successfully")
 
-                        st.components.v1.html(html_content, height=600, scrolling=True)
+                            b64 = base64.b64encode(html_content.encode()).decode()
+                            href = f'<a href="data:text/html;base64,{b64}" download="{header_title}.html">📥 Download Generated HTML</a>'
+                            st.markdown(href, unsafe_allow_html=True)
+
+                            logging.info("Displaying HTML content")
+                            st.components.v1.html(html_content, height=600, scrolling=True)
+                        except Exception as e:
+                            logging.error(f"Error generating or displaying HTML content: {str(e)}")
+                            st.error(f"An error occurred while generating the HTML content: {str(e)}")
 
 if __name__ == "__main__":
     main()

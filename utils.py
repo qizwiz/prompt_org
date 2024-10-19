@@ -1,97 +1,11 @@
-# utils.py
-
-import pandas as pd
+import logging
 import json
 from typing import List, Dict
 
-def process_csv(df: pd.DataFrame, has_image_url: bool, upload_option: str) -> List[Dict]:
-    if upload_option == "Option 1: [Letter, Prompt Name, Category, Prompt Text]":
-        column_mapping = {
-            "Letter": "Letter",
-            "Prompt Name": "PromptName",
-            "Category": "Categories",
-            "Prompt Text": "PromptText",
-        }
-        required_columns = ["Letter", "PromptName", "Categories", "PromptText"]
-    else:
-        column_mapping = {
-            "Letter": "Letter",
-            "Persona Name": "PersonaName",
-            "Category": "Categories",
-            "ImageURL": "ImageURL",
-            "Prompt Text": "PromptText",
-        }
-        required_columns = ["Letter", "PersonaName", "Categories", "ImageURL", "PromptText"]
-
-    # Rename columns based on mapping
-    df = df.rename(columns=column_mapping)
-
-    # Ensure all required columns are present
-    for col in required_columns:
-        if col not in df.columns:
-            df[col] = ""  # Add missing columns with empty strings
-
-    # Data Validation
-    required_fields_for_validation = ["Letter", "Categories", "PromptText"]
-    if has_image_url:
-        required_fields_for_validation.extend(["PersonaName", "ImageURL"])
-    else:
-        required_fields_for_validation.append("PromptName")
-
-    # Check for missing values in required fields
-    if df[required_fields_for_validation].isnull().values.any():
-        missing = df[required_fields_for_validation].isnull().sum()
-        raise ValueError(f"Missing values in required columns: {missing}")
-
-    # Convert DataFrame to list of dictionaries
-    return df[required_columns].to_dict("records")
-
-def process_json(data: List[Dict], has_image_url: bool, upload_option: str) -> List[Dict]:
-    if upload_option == "Option 1: [Letter, Prompt Name, Category, Prompt Text]":
-        required_keys = ["Letter", "PromptName", "Categories", "PromptText"]
-        key_mapping = {
-            "Prompt Name": "PromptName",
-            "Category": "Categories",
-            "Prompt Text": "PromptText",
-        }
-    else:
-        required_keys = ["Letter", "PersonaName", "Categories", "ImageURL", "PromptText"]
-        key_mapping = {
-            "Persona Name": "PersonaName",
-            "Category": "Categories",
-            "ImageURL": "ImageURL",
-            "Prompt Text": "PromptText",
-        }
-
-    processed_data = []
-    for item in data:
-        processed_item = {}
-        for key, value in item.items():
-            mapped_key = key_mapping.get(key, key)
-            if mapped_key in required_keys:
-                processed_item[mapped_key] = value
-
-        for key in required_keys:
-            if key not in processed_item:
-                processed_item[key] = ""
-
-        processed_data.append(processed_item)
-
-    # Data Validation
-    required_keys_for_validation = ["Letter", "Categories", "PromptText"]
-    if has_image_url:
-        required_keys_for_validation.extend(["PersonaName", "ImageURL"])
-    else:
-        required_keys_for_validation.append("PromptName")
-
-    for item in processed_data:
-        if any(value == "" for key, value in item.items() if key in required_keys_for_validation):
-            raise ValueError(f"Missing values in required keys for item: {item}")
-
-    return processed_data
-
 def generate_html_content(data: List[Dict], has_image_url: bool, theme: str, header_title: str) -> str:
     """Generate HTML content from the processed data."""
+    logging.info(f"Starting HTML generation with {len(data)} items")
+    
     # Precompute variables for the HTML content
     css_styles = get_css_styles()
     search_column_0 = 'Persona Name' if has_image_url else 'Letter'
@@ -400,6 +314,7 @@ def generate_html_content(data: List[Dict], has_image_url: bool, theme: str, hea
 </body>
 </html>
 '''
+    logging.info("HTML content generation completed")
     return html_content
 
 def get_css_styles() -> str:
