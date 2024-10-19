@@ -122,7 +122,7 @@ def call_openrouter_api(prompt):
                 "Content-Type": "application/json"
             },
             data=json.dumps({
-                "model": "openai/gpt-3.5-turbo",
+                "model": "google/gemini-flash-1.5-8b-exp",
                 "messages": [
                     {"role": "user", "content": prompt}
                 ]
@@ -146,12 +146,13 @@ def call_openrouter_api(prompt):
         return f"Exception occurred: {e}"
 
 # Function to generate prompt name and category using AI
-def generate_name_and_category(subject, prompt_input):
+def generate_name_and_category(subject, prompt_input, prompt_text):
     logging.info("Generating prompt name and category using AI.")
     prompt = (
         f"Based on the following information, generate a suitable prompt name and assign a relevant category.\n\n"
         f"Subject: {subject}\n"
-        f"Input: {prompt_input}\n\n"
+        f"Input: {prompt_input}\n"
+        f"Generated Prompt: {prompt_text}\n\n"
         f"Respond in the following JSON format:\n"
         f"{{\n"
         f"  \"Prompt Name\": \"Your Prompt Name\",\n"
@@ -275,7 +276,7 @@ def main():
                         ai_response = call_openrouter_api(formatted_prompt)
 
                         # Generate prompt name and category using AI
-                        prompt_name, category = generate_name_and_category(subject, prompt_input)
+                        prompt_name, category = generate_name_and_category(subject, prompt_input, ai_response)
 
                         # Determine the letter based on the first character of the prompt name
                         letter = prompt_name[0].upper() if prompt_name else "U"
