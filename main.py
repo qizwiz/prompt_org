@@ -17,6 +17,15 @@ if not OPENROUTER_API_KEY:
     st.error("OpenRouter API Key not found. Please set the OPENROUTER_API_KEY environment variable.")
     st.stop()
 
+# Available models
+AVAILABLE_MODELS = {
+    "GPT-3.5 Turbo": "openai/gpt-3.5-turbo",
+    "GPT-4": "openai/gpt-4",
+    "Claude 2": "anthropic/claude-2",
+    "PaLM 2": "google/palm-2-chat-bison",
+    "Llama 2 70B": "meta-llama/llama-2-70b-chat",
+}
+
 # Function to load templates from a file
 def load_templates():
     if 'templates' not in st.session_state:
@@ -112,8 +121,8 @@ def admin_interface():
                     st.error("No templates selected for deletion.")
 
 # Function to generate prompt text
-def call_openrouter_api(prompt):
-    logging.info("Sending prompt to OpenRouter API.")
+def call_openrouter_api(prompt, model):
+    logging.info(f"Sending prompt to OpenRouter API using model: {model}")
     try:
         response = requests.post(
             url="https://openrouter.ai/api/v1/chat/completions",
@@ -122,7 +131,7 @@ def call_openrouter_api(prompt):
                 "Content-Type": "application/json"
             },
             data=json.dumps({
-                "model": "google/gemini-flash-1.5-8b-exp",
+                "model": model,
                 "messages": [
                     {"role": "user", "content": prompt}
                 ]
@@ -146,8 +155,8 @@ def call_openrouter_api(prompt):
         return f"Exception occurred: {e}"
 
 # Function to generate prompt name and category using AI
-def generate_name_and_category(subject, prompt_input, prompt_text):
-    logging.info("Generating prompt name and category using AI.")
+def generate_name_and_category(subject, prompt_input, prompt_text, model):
+    logging.info(f"Generating prompt name and category using AI with model: {model}")
     prompt = (
         f"Based on the following information, generate a suitable prompt name and assign a relevant category.\n\n"
         f"Subject: {subject}\n"
@@ -168,7 +177,7 @@ def generate_name_and_category(subject, prompt_input, prompt_text):
                 "Content-Type": "application/json"
             },
             data=json.dumps({
-                "model": "google/gemini-flash-1.5-8b-exp",
+                "model": model,
                 "messages": [
                     {"role": "user", "content": prompt}
                 ]
@@ -262,6 +271,11 @@ def main():
                 template_names,
                 help="Select a prompt template to use."
             )
+            selected_model = st.selectbox(
+                "**Select AI Model:**",
+                list(AVAILABLE_MODELS.keys()),
+                help="Choose the AI model for generating prompts."
+            )
             prompt_count = st.number_input(
                 "**Number of Prompts to Generate:**",
                 min_value=1,
@@ -282,16 +296,17 @@ def main():
             else:
                 with st.spinner('Generating prompts...'):
                     generated_prompts = []
+                    model = AVAILABLE_MODELS[selected_model]
 
                     for i in range(int(prompt_count)):
                         # Use the selected prompt template
                         template_info = st.session_state.templates[selected_template]
                         template = template_info["content"]
                         formatted_prompt = template.replace("{subject}", subject).replace("{input}", prompt_input)
-                        ai_response = call_openrouter_api(formatted_prompt)
+                        ai_response = call_openrouter_api(formatted_prompt, model)
 
                         # Generate prompt name and category using AI
-                        prompt_name, category = generate_name_and_category(subject, prompt_input, ai_response)
+                        prompt_name, category = generate_name_and_category(subject, prompt_input, ai_response, model)
 
                         # Determine the letter based on the first character of the prompt name
                         letter = prompt_name[0].upper() if prompt_name else "U"
