@@ -33,16 +33,17 @@ def main():
 
         try:
             response = requests.post(
-                "https://api.openai.com/v1/engines/" + AVAILABLE_MODELS[model] + "/completions",
+                "https://openrouter.ai/api/v1/chat/completions",
                 headers={
                     "Content-Type": "application/json",
-                    "Authorization": f"Bearer {os.getenv('OPENAI_API_KEY')}",
+                    "Authorization": f"Bearer {os.getenv('OPENROUTER_API_KEY')}",
                 },
                 json={
-                    "prompt": prompt,
+                    "model": AVAILABLE_MODELS[model],
+                    "messages": [
+                        {"role": "user", "content": prompt}
+                    ],
                     "max_tokens": max_tokens,
-                    "n": 1,
-                    "stop": None,
                     "temperature": creativity,
                 },
             )
@@ -51,7 +52,7 @@ def main():
             result = response.json()
 
             if "choices" in result and len(result["choices"]) > 0:
-                generated_text = result["choices"][0]["text"].strip()
+                generated_text = result["choices"][0]["message"]["content"].strip()
                 prompts = [p.strip() for p in generated_text.split("\n") if p.strip()]
                 
                 generated_prompts = []
