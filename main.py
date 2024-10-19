@@ -1,20 +1,20 @@
-# app.py
-
 import streamlit as st
 import requests
 import json
 import pandas as pd
 import logging
 import os
+import base64
+from utils import generate_html_content
 
 # Set up logging to monitor issues in the app
 logging.basicConfig(filename='app.log', level=logging.INFO, format='%(asctime)s:%(levelname)s:%(message)s')
 
 # OpenRouter API Key
-OPENROUTER_API_KEY = "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"  # Replace with your actual API key
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 
 if not OPENROUTER_API_KEY:
-    st.error("OpenRouter API Key not found. Please set the OPENROUTER_API_KEY variable.")
+    st.error("OpenRouter API Key not found. Please set the OPENROUTER_API_KEY environment variable.")
     st.stop()
 
 # Function to load templates from a file
@@ -61,10 +61,9 @@ def admin_interface():
     with st.expander("➕ Add New Template"):
         template_name = st.text_input("Template Name")
         template_content = st.text_area("Template Content (use {subject} and {input} as placeholders)")
-        category = st.text_input("Category")  # Add category input
+        category = st.text_input("Category")
         if st.button("Add Template"):
             if template_name and template_content and category:
-                # Validate that placeholders exist
                 if "{subject}" in template_content and "{input}" in template_content:
                     st.session_state.templates[template_name] = {
                         "content": template_content,
@@ -137,14 +136,12 @@ def call_openrouter_api(prompt):
             logging.info("Received prompt text from OpenRouter API.")
             return prompt_text
         else:
-            # Log the error and return error message
             logging.warning(f"API Error {response.status_code}: {response.text}")
             return f"Error: {response.status_code}, {response.text}"
     except requests.exceptions.Timeout:
         st.error("The request to the API timed out. Please try again later.")
         return "Request Timed Out"
     except Exception as e:
-        # Handle unexpected exceptions
         logging.error(f"Exception occurred while generating prompt text: {e}")
         return f"Exception occurred: {e}"
 
@@ -183,7 +180,6 @@ def generate_name_and_category(subject, prompt_input):
             ai_response = response_data.get('choices', [{}])[0].get('message', {}).get('content', "").strip()
             logging.info("Received name and category from OpenRouter API.")
 
-            # Attempt to parse the AI response as JSON
             try:
                 metadata = json.loads(ai_response)
                 prompt_name = metadata.get("Prompt Name", "Unnamed Prompt")
@@ -307,10 +303,9 @@ def main():
                         mime='text/csv',
                     )
 
-                    # Optionally generate and download HTML
+                    # Generate and download HTML
                     generate_html = st.button("🖥️ Generate HTML")
                     if generate_html:
-                        from utils import generate_html_content
                         header_title = "Generated Prompts"
                         theme = "light"
                         html_content = generate_html_content(generated_prompts, has_image_url=False, theme=theme, header_title=header_title)
