@@ -19,22 +19,18 @@ if not OPENROUTER_API_KEY:
 
 # Available models
 AVAILABLE_MODELS = {
-    "GPT-3.5 Turbo": "openai/gpt-3.5-turbo",
-    "GPT-4": "openai/gpt-4",
-    "Claude 2": "anthropic/claude-2",
+    "Mistral 7B": "mistralai/ministral-7b",
+    "Mixtral 8x7B": "mistralai/mixtral-8x7b-instruct",
+    "Qwen 72B": "qwen/qwen-2.5-72b-instruct",
     "Claude 3 Haiku": "anthropic/claude-3-haiku",
     "Claude 3 Sonnet": "anthropic/claude-3-sonnet",
     "Claude 3 Opus": "anthropic/claude-3-opus",
-    "PaLM 2": "google/palm-2-chat-bison",
-    "Llama 2 70B": "meta-llama/llama-2-70b-chat",
-    "Mistral 7B": "mistralai/mistral-7b-instruct",
-    "Mixtral 8x7B": "mistralai/mixtral-8x7b-instruct",
     "Gemini Pro": "google/gemini-pro",
+    "GPT-3.5 Turbo": "openai/gpt-3.5-turbo",
+    "GPT-4": "openai/gpt-4",
     "Cohere Command": "cohere/command",
-    "Qwen 72B": "qwen/qwen-72b-chat",
 }
 
-# Function to load templates from a file
 def load_templates():
     if 'templates' not in st.session_state:
         if os.path.exists('templates.json'):
@@ -45,13 +41,11 @@ def load_templates():
             st.session_state.templates = {}
             logging.info("No templates file found. Starting with an empty template list.")
 
-# Function to save templates to a file
 def save_templates():
     with open('templates.json', 'w') as f:
         json.dump(st.session_state.templates, f)
     logging.info("Templates saved to file.")
 
-# Function to handle admin authentication
 def admin_auth():
     if 'authenticated' not in st.session_state:
         st.session_state.authenticated = False
@@ -64,17 +58,13 @@ def admin_auth():
         elif password:
             st.error("Incorrect password.")
 
-# Function to display the admin interface
 def admin_interface():
     st.header("🔒 Admin Interface")
 
-    # Load templates
     load_templates()
 
-    # Template Management
     st.subheader("Manage Templates")
 
-    # Add a new template
     with st.expander("➕ Add New Template"):
         template_name = st.text_input("Template Name")
         template_content = st.text_area("Template Content (use {subject} and {input} as placeholders)")
@@ -93,7 +83,6 @@ def admin_interface():
             else:
                 st.error("Please provide a template name, content, and category.")
 
-    # Edit existing templates
     if st.session_state.templates:
         with st.expander("✏️ Edit Existing Templates"):
             selected_template = st.selectbox("Select a template to edit", list(st.session_state.templates.keys()))
@@ -115,7 +104,6 @@ def admin_interface():
                 else:
                     st.error("Please provide a new name, content, and category.")
 
-    # Delete templates
     if st.session_state.templates:
         with st.expander("🗑️ Delete Templates"):
             templates_to_delete = st.multiselect("Select templates to delete", list(st.session_state.templates.keys()))
@@ -128,7 +116,6 @@ def admin_interface():
                 else:
                     st.error("No templates selected for deletion.")
 
-# Function to generate prompt text
 def call_openrouter_api(prompt, model):
     logging.info(f"Sending prompt to OpenRouter API using model: {model}")
     try:
@@ -144,7 +131,7 @@ def call_openrouter_api(prompt, model):
                     {"role": "user", "content": prompt}
                 ]
             }),
-            timeout=30  # Set a timeout of 30 seconds
+            timeout=30
         )
 
         if response.status_code == 200:
@@ -162,7 +149,6 @@ def call_openrouter_api(prompt, model):
         logging.error(f"Exception occurred while generating prompt text: {e}")
         return f"Exception occurred: {e}"
 
-# Function to generate prompt name and category using AI
 def generate_name_and_category(subject, prompt_input, prompt_text, model):
     logging.info(f"Generating prompt name and category using AI with model: {model}")
     prompt = (
@@ -190,22 +176,20 @@ def generate_name_and_category(subject, prompt_input, prompt_text, model):
                     {"role": "user", "content": prompt}
                 ]
             }),
-            timeout=30  # Set a timeout of 30 seconds
+            timeout=30
         )
 
         if response.status_code == 200:
             response_data = response.json()
             ai_response = response_data.get('choices', [{}])[0].get('message', {}).get('content', "").strip()
             logging.info("Received name and category from OpenRouter API.")
-            logging.debug(f"Raw AI response: {ai_response}")  # Log the raw AI response
+            logging.debug(f"Raw AI response: {ai_response}")
 
             try:
-                # Attempt to parse the JSON response
                 metadata = json.loads(ai_response)
                 prompt_name = metadata.get("Prompt Name", "Unnamed Prompt")
                 category = metadata.get("Category", "Uncategorized")
                 
-                # Validate the parsed data
                 if not prompt_name or not category:
                     raise ValueError("Invalid data in AI response")
                 
@@ -232,14 +216,11 @@ def generate_name_and_category(subject, prompt_input, prompt_text, model):
         logging.error(f"Exception occurred while generating name and category: {e}")
         st.error(f"Exception occurred while generating name and category: {e}")
 
-    # Return default values if any error occurs
     return "Unnamed Prompt", "Uncategorized"
 
-# Main Streamlit App
 def main():
     st.set_page_config(page_title="Custom Prompt Generator", page_icon="🧠")
 
-    # Sidebar Navigation
     st.sidebar.title("Navigation")
     page = st.sidebar.selectbox("Go to", ["User Interface", "Admin Interface", "Prompt Data Uploader"])
 
@@ -251,17 +232,14 @@ def main():
         from pages.Prompt_Data_Uploader import main as uploader_main
         uploader_main()
     else:
-        # User Interface
         st.title("🧠 Custom Prompt Generator")
 
         st.markdown("""
         Welcome to the **Custom Prompt Generator**! Generate creative and detailed prompts tailored to your needs.
         """)
 
-        # Load templates
         load_templates()
 
-        # Input form for prompt details
         with st.form(key='prompt_form'):
             subject = st.text_input(
                 "**Subject:**",
@@ -294,9 +272,7 @@ def main():
             )
             submit_button = st.form_submit_button(label='Generate Prompts')
 
-        # Generate prompts when form is submitted
         if submit_button:
-            # Input validation to ensure required fields are filled
             if not subject.strip() or not prompt_input.strip():
                 st.error("Please fill in both **Subject** and **Input for the Prompts** fields.")
             elif selected_template == "None":
@@ -307,19 +283,15 @@ def main():
                     model = AVAILABLE_MODELS[selected_model]
 
                     for i in range(int(prompt_count)):
-                        # Use the selected prompt template
                         template_info = st.session_state.templates[selected_template]
                         template = template_info["content"]
                         formatted_prompt = template.replace("{subject}", subject).replace("{input}", prompt_input)
                         ai_response = call_openrouter_api(formatted_prompt, model)
 
-                        # Generate prompt name and category using AI
                         prompt_name, category = generate_name_and_category(subject, prompt_input, ai_response, model)
 
-                        # Determine the letter based on the first character of the prompt name
                         letter = prompt_name[0].upper() if prompt_name else "U"
 
-                        # Store the generated prompt details
                         generated_prompts.append({
                             "Letter": letter,
                             "Prompt Name": prompt_name,
@@ -327,13 +299,11 @@ def main():
                             "Prompt Text": ai_response
                         })
 
-                # Display the generated prompts in a table
                 if generated_prompts:
                     df = pd.DataFrame(generated_prompts)
                     st.success('📄 Prompts generated successfully!')
                     st.dataframe(df, use_container_width=True)
 
-                    # Provide an option to download the generated prompts as CSV
                     csv = df.to_csv(index=False)
                     st.download_button(
                         label="📥 Download Prompts as CSV",
@@ -342,7 +312,6 @@ def main():
                         mime='text/csv',
                     )
 
-                    # Generate and download HTML
                     generate_html = st.button("🖥️ Generate HTML")
                     if generate_html:
                         header_title = "Generated Prompts"
