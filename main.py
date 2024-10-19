@@ -5,6 +5,7 @@ import pandas as pd
 import logging
 import os
 import base64
+import re
 from utils import generate_html_content, AVAILABLE_MODELS
 
 logging.basicConfig(level=logging.DEBUG)
@@ -17,8 +18,7 @@ def parse_ai_response(response_text):
     except json.JSONDecodeError:
         logging.debug("Failed to parse entire response as JSON, trying alternative methods")
         # If that fails, try to extract JSON-like structures
-        import re
-        json_like = re.findall(r'\{(?:[^{}]|(?R))*\}', response_text)
+        json_like = re.findall(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', response_text)
         if json_like:
             try:
                 parsed_data = [json.loads(item) for item in json_like]
