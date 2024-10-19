@@ -12,6 +12,10 @@ def main():
     st.set_page_config(page_title="Prompt Generator", page_icon="🤖", layout="wide")
     st.title("🤖 Prompt Generator")
 
+    # Initialize session state for generated_prompts
+    if "generated_prompts" not in st.session_state:
+        st.session_state.generated_prompts = []
+
     with st.sidebar:
         st.header("Configuration")
         model = st.selectbox("Select Model", AVAILABLE_MODELS)
@@ -65,45 +69,42 @@ def main():
         except requests.exceptions.RequestException as e:
             st.error(f"An error occurred: {str(e)}")
 
-        if generated_prompts:
-            st.subheader("Prompt Details")
-            df = pd.DataFrame(generated_prompts)
-            st.dataframe(df)
+    if 'generated_prompts' in st.session_state and st.session_state.generated_prompts:
+        generated_prompts = st.session_state.generated_prompts
 
-            csv = df.to_csv(index=False)
-            b64 = base64.b64encode(csv.encode()).decode()
-            href = f'<a href="data:file/csv;base64,{b64}" download="generated_prompts.csv">Download CSV File</a>'
-            st.markdown(href, unsafe_allow_html=True)
+        st.subheader("Prompt Details")
+        df = pd.DataFrame(generated_prompts)
+        st.dataframe(df)
 
-            generate_html = st.button("🖥️ Generate HTML")
-            if generate_html:
-                try:
-                    logging.info("Generate HTML button clicked")
-                    if not generated_prompts:
-                        logging.error("No prompts generated yet")
-                        st.error("Please generate prompts before creating HTML.")
-                        return
+        csv = df.to_csv(index=False)
+        b64 = base64.b64encode(csv.encode()).decode()
+        href = f'<a href="data:file/csv;base64,{b64}" download="generated_prompts.csv">Download CSV File</a>'
+        st.markdown(href, unsafe_allow_html=True)
 
-                    logging.info(f"Generating HTML content for {len(generated_prompts)} prompts")
-                    logging.debug(f"Generated prompts content: {json.dumps(generated_prompts, indent=2)}")
-                    
-                    header_title = "Generated Prompts"
-                    theme = "light"
-                    html_content = generate_html_content(generated_prompts, has_image_url=False, theme=theme, header_title=header_title)
+        generate_html = st.button("🖥️ Generate HTML")
+        if generate_html:
+            try:
+                logging.info("Generate HTML button clicked")
+                logging.info(f"Generating HTML content for {len(generated_prompts)} prompts")
+                logging.debug(f"Generated prompts content: {json.dumps(generated_prompts, indent=2)}")
+                
+                header_title = "Generated Prompts"
+                theme = "light"
+                html_content = generate_html_content(generated_prompts, has_image_url=False, theme=theme, header_title=header_title)
 
-                    logging.info(f"HTML content generated successfully. Length: {len(html_content)}")
-                    logging.debug(f"First 200 characters of HTML content: {html_content[:200]}")
+                logging.info(f"HTML content generated successfully. Length: {len(html_content)}")
+                logging.debug(f"First 200 characters of HTML content: {html_content[:200]}")
 
-                    b64 = base64.b64encode(html_content.encode()).decode()
-                    href = f'<a href="data:text/html;base64,{b64}" download="{header_title}.html">📥 Download Generated HTML</a>'
-                    st.markdown(href, unsafe_allow_html=True)
+                b64 = base64.b64encode(html_content.encode()).decode()
+                href = f'<a href="data:text/html;base64,{b64}" download="{header_title}.html">📥 Download Generated HTML</a>'
+                st.markdown(href, unsafe_allow_html=True)
 
-                    st.markdown(f"<h3>Generated HTML Preview:</h3>", unsafe_allow_html=True)
-                    st.markdown(html_content, unsafe_allow_html=True)
-                    logging.info("HTML content displayed successfully")
-                except Exception as e:
-                    logging.error(f"Error generating or displaying HTML content: {str(e)}")
-                    st.error(f"An error occurred while generating the HTML content: {str(e)}")
+                st.markdown(f"<h3>Generated HTML Preview:</h3>", unsafe_allow_html=True)
+                st.markdown(html_content, unsafe_allow_html=True)
+                logging.info("HTML content displayed successfully")
+            except Exception as e:
+                logging.error(f"Error generating or displaying HTML content: {str(e)}")
+                st.error(f"An error occurred while generating the HTML content: {str(e)}")
 
 if __name__ == "__main__":
     main()

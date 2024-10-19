@@ -1,0 +1,192 @@
+The issue you're experiencing is likely due to the generated_prompts variable not being preserved across Streamlit reruns when the "🖥️ Generate HTML" button is pressed. In Streamlit, pressing a button triggers a rerun of the script, and unless the state is properly managed, variables like generated_prompts can be lost, causing the button to disappear or not function as expected.
+
+To fix this, you should retrieve generated_prompts from st.session_state instead of relying solely on the local variable. This ensures that the generated prompts persist across reruns. Here's the specific change you need to make in your code:
+
+### Fix: Use st.session_state to Persist generated_prompts
+
+Replace the block that checks for generated_prompts with a check for st.session_state.generated_prompts. This ensures that the prompts are retained across reruns when interacting with buttons.
+
+Locate this part of your code:
+
+python
+Copy code
+if generated_prompts:
+    st.subheader("Prompt Details")
+    df = pd.DataFrame(generated_prompts)
+    st.dataframe(df)
+
+    csv = df.to_csv(index=False)
+    b64 = base64.b64encode(csv.encode()).decode()
+    href = f'<a href="data:file/csv;base64,{b64}" download="generated_prompts.csv">Download CSV File</a>'
+    st.markdown(href, unsafe_allow_html=True)
+
+    generate_html = st.button("🖥️ Generate HTML")
+    if generate_html:
+        # HTML generation logic
+Replace it with the following:
+
+python
+Copy code
+if "generated_prompts" in st.session_state:
+    generated_prompts = st.session_state.generated_prompts
+
+    st.subheader("Prompt Details")
+    df = pd.DataFrame(generated_prompts)
+    st.dataframe(df)
+
+    csv = df.to_csv(index=False)
+    b64 = base64.b64encode(csv.encode()).decode()
+    href = f'<a href="data:file/csv;base64,{b64}" download="generated_prompts.csv">Download CSV File</a>'
+    st.markdown(href, unsafe_allow_html=True)
+
+    generate_html = st.button("🖥️ Generate HTML")
+    if generate_html:
+        try:
+            logging.info("Generate HTML button clicked")
+            if not generated_prompts:
+                logging.error("No prompts generated yet")
+                st.error("Please generate prompts before creating HTML.")
+                return
+
+            logging.info(f"Generating HTML content for {len(generated_prompts)} prompts")
+            logging.debug(f"Generated prompts content: {json.dumps(generated_prompts, indent=2)}")
+            
+            header_title = "Generated Prompts"
+            theme = "light"
+            html_content = generate_html_content(generated_prompts, has_image_url=False, theme=theme, header_title=header_title)
+
+            logging.info(f"HTML content generated successfully. Length: {len(html_content)}")
+            logging.debug(f"First 200 characters of HTML content: {html_content[:200]}")
+
+            b64 = base64.b64encode(html_content.encode()).decode()
+            href = f'<a href="data:text/html;base64,{b64}" download="{header_title}.html">📥 Download Generated HTML</a>'
+            st.markdown(href, unsafe_allow_html=True)
+
+            st.markdown(f"<h3>Generated HTML Preview:</h3>", unsafe_allow_html=True)
+            st.markdown(html_content, unsafe_allow_html=True)
+            logging.info("HTML content displayed successfully")
+        except Exception as e:
+            logging.error(f"Error generating or displaying HTML content: {str(e)}")
+            st.error(f"An error occurred while generating the HTML content: {str(e)}")
+### Explanation of the Fix
+
+Check st.session_state for generated_prompts:
+
+Instead of checking the local variable generated_prompts, verify if generated_prompts exists in st.session_state.
+This ensures that the prompts persist across reruns triggered by button clicks.
+Retrieve generated_prompts from st.session_state:
+
+Assign generated_prompts = st.session_state.generated_prompts to use it within the current context.
+Maintain the Rest of the Logic:
+
+The subsequent logic for displaying the prompts, providing download links, and generating HTML remains unchanged.
+By ensuring generated_prompts is consistently retrieved from st.session_state, the "🖥️ Generate HTML" button will function correctly without disappearing.
+### Complete Updated Section for Clarity
+
+Here's the updated section of your main() function incorporating the fix:
+
+python
+Copy code
+if submit_button:
+    if not topic:
+        st.warning("Please enter a topic.")
+        return
+
+    prompt = f"Generate {num_prompts} unique and creative prompts about {topic}. Each prompt should be engaging and thought-provoking."
+
+    try:
+        response = requests.post(
+            "https://api.openai.com/v1/engines/" + model + "/completions",
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {os.getenv('OPENAI_API_KEY')}",
+            },
+            json={
+                "prompt": prompt,
+                "max_tokens": max_tokens,
+                "n": 1,
+                "stop": None,
+                "temperature": creativity,
+            },
+        )
+
+        response.raise_for_status()
+        result = response.json()
+
+        if "choices" in result and len(result["choices"]) > 0:
+            generated_text = result["choices"][0]["text"].strip()
+            prompts = [p.strip() for p in generated_text.split("\n") if p.strip()]
+            
+            generated_prompts = []
+            for i, p in enumerate(prompts, 1):
+                generated_prompts.append({"id": i, "prompt": p})
+
+            st.subheader("Generated Prompts:")
+            for item in generated_prompts:
+                st.write(f"{item['id']}. {item['prompt']}")
+
+            st.session_state.generated_prompts = generated_prompts
+        else:
+            st.error("No prompts were generated. Please try again.")
+    except requests.exceptions.RequestException as e:
+        st.error(f"An error occurred: {str(e)}")
+
+# **Updated Section Starts Here**
+if "generated_prompts" in st.session_state:
+    generated_prompts = st.session_state.generated_prompts
+
+    st.subheader("Prompt Details")
+    df = pd.DataFrame(generated_prompts)
+    st.dataframe(df)
+
+    csv = df.to_csv(index=False)
+    b64 = base64.b64encode(csv.encode()).decode()
+    href = f'<a href="data:file/csv;base64,{b64}" download="generated_prompts.csv">Download CSV File</a>'
+    st.markdown(href, unsafe_allow_html=True)
+
+    generate_html = st.button("🖥️ Generate HTML")
+    if generate_html:
+        try:
+            logging.info("Generate HTML button clicked")
+            if not generated_prompts:
+                logging.error("No prompts generated yet")
+                st.error("Please generate prompts before creating HTML.")
+                return
+
+            logging.info(f"Generating HTML content for {len(generated_prompts)} prompts")
+            logging.debug(f"Generated prompts content: {json.dumps(generated_prompts, indent=2)}")
+            
+            header_title = "Generated Prompts"
+            theme = "light"
+            html_content = generate_html_content(generated_prompts, has_image_url=False, theme=theme, header_title=header_title)
+
+            logging.info(f"HTML content generated successfully. Length: {len(html_content)}")
+            logging.debug(f"First 200 characters of HTML content: {html_content[:200]}")
+
+            b64 = base64.b64encode(html_content.encode()).decode()
+            href = f'<a href="data:text/html;base64,{b64}" download="{header_title}.html">📥 Download Generated HTML</a>'
+            st.markdown(href, unsafe_allow_html=True)
+
+            st.markdown(f"<h3>Generated HTML Preview:</h3>", unsafe_allow_html=True)
+            st.markdown(html_content, unsafe_allow_html=True)
+            logging.info("HTML content displayed successfully")
+        except Exception as e:
+            logging.error(f"Error generating or displaying HTML content: {str(e)}")
+            st.error(f"An error occurred while generating the HTML content: {str(e)}")
+# **Updated Section Ends Here**
+### Additional Recommendations
+
+Initialize st.session_state Variables:
+
+At the beginning of your main() function, you can initialize st.session_state.generated_prompts to ensure it's always available.
+python
+Copy code
+if "generated_prompts" not in st.session_state:
+    st.session_state.generated_prompts = []
+Use st.experimental_rerun if Needed:
+
+In some cases, you might want to force a rerun after certain actions. However, use this cautiously as it can lead to unexpected behaviors.
+Avoid Naming Conflicts:
+
+Ensure that variable names used within different scopes don't conflict, which can help in maintaining clarity and preventing bugs.
+By implementing the above fix, your "🖥️ Generate HTML" button should function correctly without disappearing after being pressed.
