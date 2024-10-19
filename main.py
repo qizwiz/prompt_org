@@ -442,7 +442,13 @@ def main():
                     generate_html = st.button("🖥️ Generate HTML")
                     if generate_html:
                         try:
-                            logging.info("Generating HTML content")
+                            logging.info("Generate HTML button clicked")
+                            if 'generated_prompts' not in locals():
+                                logging.error("No prompts generated yet")
+                                st.error("Please generate prompts before creating HTML.")
+                                return
+
+                            logging.info(f"Generating HTML content for {len(generated_prompts)} prompts")
                             header_title = "Generated Prompts"
                             theme = "light"
                             html_content = generate_html_content(generated_prompts, has_image_url=False, theme=theme, header_title=header_title)
@@ -455,6 +461,7 @@ def main():
 
                             logging.info("Displaying HTML content")
                             st.components.v1.html(html_content, height=600, scrolling=True)
+                            logging.info("HTML content displayed successfully")
                         except Exception as e:
                             logging.error(f"Error generating or displaying HTML content: {str(e)}")
                             st.error(f"An error occurred while generating the HTML content: {str(e)}")
