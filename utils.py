@@ -22,6 +22,14 @@ def generate_html_content(data: List[Dict], has_image_url: bool, theme: str, hea
     # Precompute variables for the HTML content
     css_styles = get_css_styles()
 
+    # Group prompts by their starting letter
+    prompts_by_letter = {}
+    for item in data:
+        letter = item['Letter'].upper()
+        if letter not in prompts_by_letter:
+            prompts_by_letter[letter] = []
+        prompts_by_letter[letter].append(item)
+
     # Start building the HTML content using f-strings
     html_content = f"""
 <!DOCTYPE html>
@@ -54,48 +62,61 @@ def generate_html_content(data: List[Dict], has_image_url: bool, theme: str, hea
             <option value="3">Prompt Text</option>
         </select>
     </div>
-    <!-- Content Section -->
+    <!-- Alphabet Menu -->
+    <div id="alphabet-menu">
+        {' '.join([f'<a href="#section-{letter}">{letter}</a>' for letter in sorted(prompts_by_letter.keys())])}
+    </div>
+    <!-- Content Sections -->
     <div id="content">
-        <table class="table table-bordered table-hover">
-            <thead>
-                <tr>
-                    <th class="sortable" onclick="sortTable(this, 0)">Letter</th>
-                    <th class="sortable" onclick="sortTable(this, 1)">Prompt Name</th>
-                    <th class="sortable" onclick="sortTable(this, 2)">Category</th>
-                    <th class="sortable" onclick="sortTable(this, 3)">Prompt Text</th>
-                    <th>Copy Prompt</th>
-                </tr>
-            </thead>
-            <tbody>
     """
 
-    # Generate content for each entry
-    for item in data:
-        letter = item.get('Letter', '')
-        prompt_name = item.get('PromptName', '')
-        category = item.get('Categories', '')
-        prompt_text = item.get('PromptText', '').replace('\n', '<br>')
-
-        # Sanitize prompt_text
-        prompt_text = prompt_text.replace("fucked", "****")
-
-        # Adjusted copyText function call to handle special characters
-        sanitized_prompt_text = prompt_text.replace("`", "\\`").replace("\\", "\\\\").replace("\n", "\\n")
-
+    # Generate content for each letter
+    for letter in sorted(prompts_by_letter.keys()):
         html_content += f"""
-                <tr>
-                    <td>{letter}</td>
-                    <td>{prompt_name}</td>
-                    <td>{category}</td>
-                    <td>{prompt_text}</td>
-                    <td><button class="btn btn-primary copy-button" onclick="copyText(`{sanitized_prompt_text}`)">Copy</button></td>
-                </tr>
+        <div id="section-{letter}">
+            <h2>{letter}</h2>
+            <table class="table table-bordered table-hover">
+                <thead>
+                    <tr>
+                        <th class="sortable" onclick="sortTable(this, 0)">Letter</th>
+                        <th class="sortable" onclick="sortTable(this, 1)">Prompt Name</th>
+                        <th class="sortable" onclick="sortTable(this, 2)">Category</th>
+                        <th class="sortable" onclick="sortTable(this, 3)">Prompt Text</th>
+                        <th>Copy Prompt</th>
+                    </tr>
+                </thead>
+                <tbody>
         """
 
-    # Close the table and add scripts
+        for item in prompts_by_letter[letter]:
+            prompt_name = item.get('PromptName', '')
+            category = item.get('Category', '')
+            prompt_text = item.get('PromptText', '').replace('\n', '<br>')
+
+            # Sanitize prompt_text
+            prompt_text = prompt_text.replace("fucked", "****")
+
+            # Adjusted copyText function call to handle special characters
+            sanitized_prompt_text = prompt_text.replace("`", "\\`").replace("\\", "\\\\").replace("\n", "\\n")
+
+            html_content += f"""
+                    <tr>
+                        <td>{letter}</td>
+                        <td>{prompt_name}</td>
+                        <td>{category}</td>
+                        <td>{prompt_text}</td>
+                        <td><button class="btn btn-primary copy-button" onclick="copyText(`{sanitized_prompt_text}`)">Copy</button></td>
+                    </tr>
+            """
+
+        html_content += """
+                </tbody>
+            </table>
+        </div>
+        """
+
+    # Close the content div and add scripts
     html_content += """
-            </tbody>
-        </table>
     </div>
     <!-- Include jQuery and Bootstrap JS -->
     <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
@@ -108,47 +129,49 @@ def generate_html_content(data: List[Dict], has_image_url: bool, theme: str, hea
         }
 
         function searchTable() {
-            var input, filter, table, tr, td, i, txtValue;
+            var input, filter, tables, tr, td, i, txtValue;
             input = document.getElementById("searchInput");
             filter = input.value.toUpperCase();
             var columnSelect = document.getElementById("searchColumn");
             var columnIndex = columnSelect.value === "all" ? -1 : parseInt(columnSelect.value);
 
-            table = document.querySelector("table");
-            tr = table.getElementsByTagName("tr");
+            tables = document.querySelectorAll("#content table");
+            tables.forEach(function(table) {
+                tr = table.getElementsByTagName("tr");
 
-            for (i = 1; i < tr.length; i++) {
-                tr[i].style.display = "none";
-                if (columnIndex === -1) {
-                    // Search all columns
-                    var found = false;
-                    td = tr[i].getElementsByTagName("td");
-                    for (var j = 0; j < td.length - 1; j++) { // Exclude the Copy button column
-                        if (td[j]) {
-                            txtValue = td[j].textContent || td[j].innerText;
+                for (i = 1; i < tr.length; i++) {
+                    tr[i].style.display = "none";
+                    if (columnIndex === -1) {
+                        // Search all columns
+                        var found = false;
+                        td = tr[i].getElementsByTagName("td");
+                        for (var j = 0; j < td.length - 1; j++) { // Exclude the Copy button column
+                            if (td[j]) {
+                                txtValue = td[j].textContent || td[j].innerText;
+                                if (txtValue.toUpperCase().indexOf(filter) > -1) {
+                                    found = true;
+                                    break;
+                                }
+                            }
+                        }
+                        if (found) tr[i].style.display = "";
+                    } else {
+                        // Search specific column
+                        td = tr[i].getElementsByTagName("td")[columnIndex];
+                        if (td) {
+                            txtValue = td.textContent || td.innerText;
                             if (txtValue.toUpperCase().indexOf(filter) > -1) {
-                                found = true;
-                                break;
+                                tr[i].style.display = "";
                             }
                         }
                     }
-                    if (found) tr[i].style.display = "";
-                } else {
-                    // Search specific column
-                    td = tr[i].getElementsByTagName("td")[columnIndex];
-                    if (td) {
-                        txtValue = td.textContent || td.innerText;
-                        if (txtValue.toUpperCase().indexOf(filter) > -1) {
-                            tr[i].style.display = "";
-                        }
-                    }
                 }
-            }
+            });
         }
 
         function sortTable(header, columnIndex) {
             var table, rows, switching, i, x, y, shouldSwitch, dir, switchcount = 0;
-            table = document.querySelector("table");
+            table = header.closest('table');
             switching = true;
             dir = "asc";
 
@@ -222,10 +245,23 @@ def get_css_styles() -> str:
     .search-bar select {
         width: 200px;
     }
+    #alphabet-menu {
+        display: flex;
+        justify-content: center;
+        flex-wrap: wrap;
+        margin-bottom: 20px;
+    }
+    #alphabet-menu a {
+        margin: 5px;
+        text-decoration: none;
+        font-weight: bold;
+        color: #007bff;
+    }
     table {
         background-color: #ffffff;
         border-collapse: collapse;
         width: 100%;
+        margin-bottom: 30px;
     }
     th, td {
         border: 1px solid #ddd;

@@ -8,18 +8,24 @@ import base64
 import re
 from utils import generate_html_content, AVAILABLE_MODELS
 
+logging.basicConfig(level=logging.DEBUG)
+
 def parse_ai_response(response_text):
+    logging.debug(f"Parsing AI response: {response_text}")
     try:
         # Try parsing the entire response as JSON
         return json.loads(response_text)
     except json.JSONDecodeError:
+        logging.debug("Failed to parse entire response as JSON, trying alternative methods")
         # If that fails, try to extract JSON-like structures
-        json_like = re.findall(r'\{[^{}]*\}', response_text)
+        json_like = re.findall(r'\{[^{}]+\}', response_text)
         if json_like:
             try:
-                return [json.loads(item) for item in json_like]
+                parsed_data = [json.loads(item) for item in json_like]
+                logging.debug(f"Parsed data from JSON-like structures: {parsed_data}")
+                return parsed_data
             except json.JSONDecodeError:
-                pass
+                logging.debug("Failed to parse JSON-like structures")
         
         # If all else fails, fall back to simple text-based parsing
         prompts = []
@@ -28,12 +34,14 @@ def parse_ai_response(response_text):
             if line.strip():
                 parts = line.split(':', 1)
                 if len(parts) == 2:
-                    prompts.append({
+                    prompt = {
                         'Letter': parts[0].strip()[0],
                         'PromptName': parts[0].strip(),
                         'Category': 'General',  # Default category
                         'PromptText': parts[1].strip()
-                    })
+                    }
+                    prompts.append(prompt)
+        logging.debug(f"Parsed data from text-based parsing: {prompts}")
         return prompts
 
 def main():
@@ -82,6 +90,7 @@ def main():
 
             if "choices" in result and len(result["choices"]) > 0:
                 generated_text = result["choices"][0]["message"]["content"].strip()
+                logging.debug(f"Generated text: {generated_text}")
                 generated_prompts = parse_ai_response(generated_text)
 
                 if not generated_prompts:
