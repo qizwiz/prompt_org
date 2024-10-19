@@ -5,7 +5,36 @@ import pandas as pd
 import logging
 import os
 import base64
+import re
 from utils import generate_html_content, AVAILABLE_MODELS
+
+def parse_ai_response(response_text):
+    try:
+        # Try parsing the entire response as JSON
+        return json.loads(response_text)
+    except json.JSONDecodeError:
+        # If that fails, try to extract JSON-like structures
+        json_like = re.findall(r'\{(?:[^{}]|(?R))*\}', response_text)
+        if json_like:
+            try:
+                return [json.loads(item) for item in json_like]
+            except json.JSONDecodeError:
+                pass
+        
+        # If all else fails, fall back to simple text-based parsing
+        prompts = []
+        lines = response_text.split('\n')
+        for line in lines:
+            if line.strip():
+                parts = line.split(':', 1)
+                if len(parts) == 2:
+                    prompts.append({
+                        'Letter': parts[0].strip()[0],
+                        'PromptName': parts[0].strip(),
+                        'Category': 'General',  # Default category
+                        'PromptText': parts[1].strip()
+                    })
+        return prompts
 
 def main():
     st.set_page_config(page_title="Prompt Generator", page_icon="🤖", layout="wide")
@@ -53,9 +82,9 @@ def main():
 
             if "choices" in result and len(result["choices"]) > 0:
                 generated_text = result["choices"][0]["message"]["content"].strip()
-                try:
-                    generated_prompts = json.loads(generated_text)
-                except json.JSONDecodeError:
+                generated_prompts = parse_ai_response(generated_text)
+
+                if not generated_prompts:
                     st.error("Failed to parse the generated prompts. Please try again.")
                     return
 
