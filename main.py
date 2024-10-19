@@ -41,7 +41,7 @@ def parse_ai_response(response_text):
                     prompt = {
                         'Letter': parts[0].strip()[0],
                         'PromptName': parts[0].strip(),
-                        'Category': 'General',  # Default category
+                        'Categories': 'General',  # Default category
                         'PromptText': parts[1].strip()
                     }
                     prompts.append(prompt)
@@ -73,17 +73,17 @@ def main():
         prompt = f"""Generate {num_prompts} unique and creative prompts about {topic}. Each prompt should be engaging and thought-provoking. For each prompt, provide:
         1. A single letter identifier (A-Z) that best represents the prompt's theme or content.
         2. A concise and relevant prompt name.
-        3. A suitable category for the prompt.
+        3. A list of 2-3 relevant categories or tags for the prompt, separated by commas.
         4. The actual prompt text.
 
-        Format the output as a list of JSON objects, each containing 'Letter', 'PromptName', 'Category', and 'PromptText' fields. Ensure that the letter and prompt name are closely related to the prompt's content.
+        Format the output as a list of JSON objects, each containing 'Letter', 'PromptName', 'Categories', and 'PromptText' fields. Ensure that the letter and prompt name are closely related to the prompt's content.
 
         Example format:
         [
           {{
             "Letter": "A",
             "PromptName": "Artistic Exploration",
-            "Category": "Creativity",
+            "Categories": "Creativity, Visual Arts, Imagination",
             "PromptText": "Describe a world where colors have sounds and music creates visible patterns in the air."
           }},
           ...
@@ -121,7 +121,7 @@ def main():
 
                 st.subheader("Generated Prompts:")
                 for item in generated_prompts:
-                    st.write(f"{item['Letter']}. {item['PromptName']} ({item['Category']}): {item['PromptText']}")
+                    st.write(f"{item['Letter']}. {item['PromptName']} ({item['Categories']}): {item['PromptText']}")
 
                 st.session_state.generated_prompts = generated_prompts
             else:
