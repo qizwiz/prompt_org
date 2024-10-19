@@ -5,7 +5,6 @@ import pandas as pd
 import logging
 import os
 import base64
-import re
 from utils import generate_html_content, AVAILABLE_MODELS
 
 logging.basicConfig(level=logging.DEBUG)
@@ -18,7 +17,8 @@ def parse_ai_response(response_text):
     except json.JSONDecodeError:
         logging.debug("Failed to parse entire response as JSON, trying alternative methods")
         # If that fails, try to extract JSON-like structures
-        json_like = re.findall(r'\{[^{}]+\}', response_text)
+        import re
+        json_like = re.findall(r'\{(?:[^{}]|(?R))*\}', response_text)
         if json_like:
             try:
                 parsed_data = [json.loads(item) for item in json_like]
@@ -66,7 +66,25 @@ def main():
             st.warning("Please enter a topic.")
             return
 
-        prompt = f"Generate {num_prompts} unique and creative prompts about {topic}. Each prompt should be engaging and thought-provoking. For each prompt, provide a single letter identifier, a prompt name, and a category. Format the output as a list of JSON objects, each containing 'Letter', 'PromptName', 'Category', and 'PromptText' fields."
+        prompt = f"""Generate {num_prompts} unique and creative prompts about {topic}. Each prompt should be engaging and thought-provoking. For each prompt, provide:
+        1. A single letter identifier (A-Z) that best represents the prompt's theme or content.
+        2. A concise and relevant prompt name.
+        3. A suitable category for the prompt.
+        4. The actual prompt text.
+
+        Format the output as a list of JSON objects, each containing 'Letter', 'PromptName', 'Category', and 'PromptText' fields. Ensure that the letter and prompt name are closely related to the prompt's content.
+
+        Example format:
+        [
+          {{
+            "Letter": "A",
+            "PromptName": "Artistic Exploration",
+            "Category": "Creativity",
+            "PromptText": "Describe a world where colors have sounds and music creates visible patterns in the air."
+          }},
+          ...
+        ]
+        """
 
         try:
             response = requests.post(
