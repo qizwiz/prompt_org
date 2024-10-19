@@ -22,8 +22,16 @@ AVAILABLE_MODELS = {
     "GPT-3.5 Turbo": "openai/gpt-3.5-turbo",
     "GPT-4": "openai/gpt-4",
     "Claude 2": "anthropic/claude-2",
+    "Claude 3 Haiku": "anthropic/claude-3-haiku",
+    "Claude 3 Sonnet": "anthropic/claude-3-sonnet",
+    "Claude 3 Opus": "anthropic/claude-3-opus",
     "PaLM 2": "google/palm-2-chat-bison",
     "Llama 2 70B": "meta-llama/llama-2-70b-chat",
+    "Mistral 7B": "mistralai/mistral-7b-instruct",
+    "Mixtral 8x7B": "mistralai/mixtral-8x7b-instruct",
+    "Gemini Pro": "google/gemini-pro",
+    "Cohere Command": "cohere/command",
+    "Qwen 72B": "qwen/qwen-72b-chat",
 }
 
 # Function to load templates from a file
