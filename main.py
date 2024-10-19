@@ -180,28 +180,43 @@ def generate_name_and_category(subject, prompt_input, prompt_text):
             response_data = response.json()
             ai_response = response_data.get('choices', [{}])[0].get('message', {}).get('content', "").strip()
             logging.info("Received name and category from OpenRouter API.")
+            logging.debug(f"Raw AI response: {ai_response}")  # Log the raw AI response
 
             try:
+                # Attempt to parse the JSON response
                 metadata = json.loads(ai_response)
                 prompt_name = metadata.get("Prompt Name", "Unnamed Prompt")
                 category = metadata.get("Category", "Uncategorized")
+                
+                # Validate the parsed data
+                if not prompt_name or not category:
+                    raise ValueError("Invalid data in AI response")
+                
                 return prompt_name, category
-            except json.JSONDecodeError:
-                logging.error("Failed to parse AI response for name and category.")
+            except json.JSONDecodeError as json_error:
+                logging.error(f"Failed to parse AI response as JSON: {json_error}")
+                logging.error(f"Raw AI response: {ai_response}")
                 st.error("Failed to parse the AI response for prompt name and category.")
-                return "Unnamed Prompt", "Uncategorized"
+            except ValueError as value_error:
+                logging.error(f"Invalid data in AI response: {value_error}")
+                logging.error(f"Raw AI response: {ai_response}")
+                st.error("Invalid data received from AI for prompt name and category.")
+            except Exception as e:
+                logging.error(f"Unexpected error while processing AI response: {e}")
+                logging.error(f"Raw AI response: {ai_response}")
+                st.error("An unexpected error occurred while processing the AI response.")
         else:
             logging.warning(f"API Error {response.status_code} while generating name and category: {response.text}")
             st.error(f"Error generating name and category: {response.status_code}")
-            return "Unnamed Prompt", "Uncategorized"
     except requests.exceptions.Timeout:
         logging.error("The request to the API for name and category timed out.")
         st.error("The request to the API for name and category timed out. Please try again later.")
-        return "Unnamed Prompt", "Uncategorized"
     except Exception as e:
         logging.error(f"Exception occurred while generating name and category: {e}")
         st.error(f"Exception occurred while generating name and category: {e}")
-        return "Unnamed Prompt", "Uncategorized"
+
+    # Return default values if any error occurs
+    return "Unnamed Prompt", "Uncategorized"
 
 # Main Streamlit App
 def main():
