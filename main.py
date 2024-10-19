@@ -14,7 +14,7 @@ def parse_ai_response(response_text):
         return json.loads(response_text)
     except json.JSONDecodeError:
         # If that fails, try to extract JSON-like structures
-        json_like = re.findall(r'\{(?:[^{}]|(?R))*\}', response_text)
+        json_like = re.findall(r'\{[^{}]*\}', response_text)
         if json_like:
             try:
                 return [json.loads(item) for item in json_like]
