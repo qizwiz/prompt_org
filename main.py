@@ -5,8 +5,7 @@ import pandas as pd
 import logging
 import os
 import base64
-from utils import generate_html_content
-from utils import AVAILABLE_MODELS
+from utils import generate_html_content, AVAILABLE_MODELS
 
 def main():
     st.set_page_config(page_title="Prompt Generator", page_icon="🤖", layout="wide")
@@ -18,7 +17,7 @@ def main():
 
     with st.sidebar:
         st.header("Configuration")
-        model = st.selectbox("Select Model", AVAILABLE_MODELS)
+        model = st.selectbox("Select Model", list(AVAILABLE_MODELS.keys()))
         num_prompts = st.number_input("Number of Prompts", min_value=1, max_value=10, value=3)
         topic = st.text_input("Topic")
         creativity = st.slider("Creativity", min_value=0.0, max_value=1.0, value=0.7, step=0.1)
@@ -34,7 +33,7 @@ def main():
 
         try:
             response = requests.post(
-                "https://api.openai.com/v1/engines/" + model + "/completions",
+                "https://api.openai.com/v1/engines/" + AVAILABLE_MODELS[model] + "/completions",
                 headers={
                     "Content-Type": "application/json",
                     "Authorization": f"Bearer {os.getenv('OPENAI_API_KEY')}",
