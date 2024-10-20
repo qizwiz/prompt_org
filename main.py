@@ -5,7 +5,7 @@ import pandas as pd
 import logging
 import os
 import base64
-from utils import generate_html_content, AVAILABLE_MODELS
+from utils import generate_html_content, AVAILABLE_MODELS, generate_detailed_user_prompt
 
 # Set up logging
 logging.basicConfig(filename='app.log', level=logging.INFO,
@@ -47,6 +47,15 @@ def main():
         if "generated_prompts" not in st.session_state:
             st.session_state.generated_prompts = []
 
+        # Hidden prompts
+        hidden_prompts = [
+            "Write a story about a time traveler who accidentally changes a major historical event.",
+            "Describe a world where humans can communicate telepathically with animals.",
+            "Create a dialogue between two AI systems debating the nature of consciousness.",
+            "Imagine a society where aging has been cured, and explore its implications.",
+            "Design a futuristic city that's entirely sustainable and eco-friendly."
+        ]
+
         # Input form for prompt details
         with st.form(key='prompt_form'):
             topic = st.text_input(
@@ -68,6 +77,15 @@ def main():
                 step=1,
                 help="Specify how many prompts you want to generate."
             )
+
+            # Hidden prompts selection
+            use_hidden_prompts = st.checkbox("Use hidden prompts")
+            if use_hidden_prompts:
+                selected_hidden_prompts = st.multiselect(
+                    "Select hidden prompts:",
+                    hidden_prompts,
+                    format_func=lambda x: x[:50] + "..." if len(x) > 50 else x
+                )
 
             max_allowed_tokens = AVAILABLE_MODELS[model]['context_tokens'] - 500
             max_tokens = st.slider(
@@ -126,9 +144,14 @@ You are an advanced AI language model designed to generate creative and engaging
 - Only provide the JSON array as the output.
 - Ensure diversity in the prompts to cover different subtopics and perspectives related to '{topic}'.
 - Each prompt should be self-contained and provide enough detail to fully understand the scenario.
-
-Generate the {num_prompts} prompts now.
 """
+
+            if use_hidden_prompts and selected_hidden_prompts:
+                ai_prompt += f"\n\n**Additional Instructions:**\nIncorporate the following hidden prompts into your generated prompts, adapting them to fit the main topic '{topic}':\n"
+                for idx, hidden_prompt in enumerate(selected_hidden_prompts, 1):
+                    ai_prompt += f"{idx}. {hidden_prompt}\n"
+
+            ai_prompt += f"\nGenerate the {num_prompts} prompts now."
 
             try:
                 response = requests.post(
@@ -223,11 +246,13 @@ Generate the {num_prompts} prompts now.
         2. Choose an AI model
         3. Set the number of prompts you want
         4. Adjust the creativity level
-        5. Generate your custom prompts!
+        5. Optionally select hidden prompts
+        6. Generate your custom prompts!
 
         ### Features:
         - Multiple AI models to choose from
         - Adjustable creativity settings
+        - Hidden prompts for additional inspiration
         - Export options (CSV and HTML)
         - Categorized prompts for easy organization
 
