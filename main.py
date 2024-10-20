@@ -108,6 +108,9 @@ def main():
             available_hidden_prompts = list(hidden_prompts.keys())
             selected_hidden_prompts = st.multiselect("Select hidden prompts", available_hidden_prompts)
 
+            # Add custom template input
+            user_template = st.text_area("Custom Template (optional)", placeholder="Enter your custom template here. Use {subject} as a placeholder for the topic.")
+
             max_allowed_tokens = AVAILABLE_MODELS[model]['context_tokens'] - 500
             max_tokens = st.slider(
                 "**Max Tokens:**",
@@ -132,7 +135,10 @@ def main():
                 st.warning("Please enter a topic.")
                 return
 
-            if selected_template != "None":
+            # Modify prompt generation logic
+            if user_template:
+                ai_prompt = user_template.format(subject=topic)
+            elif selected_template != "None":
                 template = templates[selected_template]
                 ai_prompt = template.format(subject=topic)
             else:
@@ -176,7 +182,8 @@ def main():
 
                     st.subheader("Generated Prompts:")
                     for idx, item in enumerate(generated_prompts, 1):
-                        st.write(f"**{idx}. {item['PromptName']}**")
+                        # Update display of generated prompts
+                        st.write(f"**Type: {item['PromptName']}**")
                         st.write(item['PromptText'])
                         st.write(f"Categories: {item['Categories']}")
                         st.write("---")
