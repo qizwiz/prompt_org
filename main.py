@@ -79,14 +79,14 @@ def user_interface():
         categories = sorted(set(cat for cats in existing_prompts['Categories'] for cat in cats.split(',')))
         selected_category = st.selectbox("Select Category", [""] + categories)
 
-        # Add prompt name selection (only show if category is selected)
+        # Update prompt name selection
         prompt_names = []
         if selected_category:
             prompt_names = existing_prompts[existing_prompts['Categories'].str.contains(selected_category)]['PromptName'].tolist()
         selected_prompt = st.selectbox("Select Prompt", [""] + prompt_names, disabled=not selected_category)
 
-        # Disable topic input if a prompt is selected
-        topic = st.text_input("Topic:", disabled=selected_prompt != "")
+        # Remove the disabled attribute from the topic input
+        topic = st.text_input("Topic:")
 
         model = st.selectbox(
             "**Select AI Model:**",
@@ -130,29 +130,17 @@ def user_interface():
         else:
             openrouter_api_key = os.getenv('OPENROUTER_API_KEY')
 
-        submit_button = st.form_submit_button(label='Generate Prompts', disabled=not (selected_prompt or topic))
+        # Update the submit button condition
+        submit_button = st.form_submit_button(label='Generate Prompts')
 
     if submit_button:
-        if selected_prompt:
-            # Use the selected prompt
+        if selected_prompt and topic:
+            # Use both selected prompt and topic
             selected_prompt_data = existing_prompts[existing_prompts['PromptName'] == selected_prompt].iloc[0]
-            st.session_state.generated_prompts = [{
-                "Letter": selected_prompt_data['PromptName'][0],
-                "PromptName": selected_prompt_data['PromptName'],
-                "Categories": selected_prompt_data['Categories'],
-                "PromptText": selected_prompt_data['PromptText']
-            }]
-            st.subheader("Selected Prompt:")
-            st.markdown(f"**{selected_prompt_data['PromptName']}** ({selected_prompt_data['Categories']}):\n{selected_prompt_data['PromptText']}")
-        elif not topic:
-            st.warning("Please enter a topic or select a prompt.")
-        elif not openrouter_api_key:
-            st.warning("Please provide your OpenRouter API Key.")
-        else:
             ai_prompt = f"""
-You are an advanced AI language model designed to generate creative and engaging writing prompts.
+Based on the prompt: {selected_prompt_data['PromptText']}
 
-Task: Generate {num_prompts} unique, long, and detailed writing prompts about the topic '{topic}'.
+Generate {num_prompts} unique, long, and detailed writing prompts about the topic '{topic}'.
 
 Each prompt should include:
 - **Letter**: The first letter of the 'PromptName'.
@@ -171,7 +159,44 @@ Format:
   ...
 ]
 """
+        elif selected_prompt:
+            # Use only the selected prompt
+            selected_prompt_data = existing_prompts[existing_prompts['PromptName'] == selected_prompt].iloc[0]
+            st.session_state.generated_prompts = [{
+                "Letter": selected_prompt_data['PromptName'][0],
+                "PromptName": selected_prompt_data['PromptName'],
+                "Categories": selected_prompt_data['Categories'],
+                "PromptText": selected_prompt_data['PromptText']
+            }]
+            st.subheader("Selected Prompt:")
+            st.markdown(f"**{selected_prompt_data['PromptName']}** ({selected_prompt_data['Categories']}):\n{selected_prompt_data['PromptText']}")
+        elif topic:
+            # Generate new prompts based on the topic
+            ai_prompt = f"""
+Generate {num_prompts} unique, long, and detailed writing prompts about the topic '{topic}'.
 
+Each prompt should include:
+- **Letter**: The first letter of the 'PromptName'.
+- **PromptName**: A catchy and relevant title starting with the specified 'Letter'.
+- **Categories**: Comma-separated categories or tags.
+- **PromptText**: A detailed description with rich context.
+
+Format:
+[
+  {{
+    "Letter": "A",
+    "PromptName": "Example Title",
+    "Categories": "Category1, Category2",
+    "PromptText": "Detailed prompt text."
+  }},
+  ...
+]
+"""
+        else:
+            st.warning("Please enter a topic or select a prompt.")
+            return
+
+        if (selected_prompt and topic) or topic:
             try:
                 headers = {
                     "Content-Type": "application/json",
