@@ -7,7 +7,6 @@ import os
 import base64
 from utils import generate_html_content, AVAILABLE_MODELS, generate_detailed_user_prompt
 
-# Set up logging
 logging.basicConfig(filename='app.log', level=logging.INFO,
                     format='%(asctime)s:%(levelname)s:%(message)s')
 
@@ -29,10 +28,90 @@ def parse_ai_response(response_text):
                 continue
     return parsed_data
 
+def admin_auth():
+    if 'authenticated' not in st.session_state:
+        st.session_state.authenticated = False
+
+    if not st.session_state.authenticated:
+        password = st.text_input("Enter admin password:", type="password")
+        if password == "your_admin_password":  # Replace with your admin password
+            st.session_state.authenticated = True
+            st.success("Authentication successful!")
+        elif password:
+            st.error("Incorrect password.")
+
+def load_templates():
+    try:
+        with open('templates.json', 'r') as f:
+            st.session_state.templates = json.load(f)
+    except FileNotFoundError:
+        st.session_state.templates = {}
+
+def save_templates():
+    with open('templates.json', 'w') as f:
+        json.dump(st.session_state.templates, f)
+
+def admin_interface():
+    st.header("🔒 Admin Interface")
+
+    load_templates()
+
+    st.subheader("Manage Templates")
+
+    with st.expander("➕ Add New Template"):
+        template_name = st.text_input("Template Name")
+        template_content = st.text_area("Template Content (use {subject} and {input} as placeholders)")
+        category = st.text_input("Category")
+        if st.button("Add Template"):
+            if template_name and template_content and category:
+                if "{subject}" in template_content and "{input}" in template_content:
+                    st.session_state.templates[template_name] = {
+                        "content": template_content,
+                        "category": category
+                    }
+                    save_templates()
+                    st.success(f"Template '{template_name}' added.")
+                else:
+                    st.error("Template content must include both {subject} and {input} placeholders.")
+            else:
+                st.error("Please provide a template name, content, and category.")
+
+    if st.session_state.templates:
+        with st.expander("✏️ Edit Existing Templates"):
+            selected_template = st.selectbox("Select a template to edit", list(st.session_state.templates.keys()))
+            new_name = st.text_input("New Template Name", value=selected_template)
+            new_content = st.text_area("New Template Content", value=st.session_state.templates[selected_template]["content"])
+            new_category = st.text_input("New Category", value=st.session_state.templates[selected_template]["category"])
+            if st.button("Update Template"):
+                if new_name and new_content and new_category:
+                    if "{subject}" in new_content and "{input}" in new_content:
+                        del st.session_state.templates[selected_template]
+                        st.session_state.templates[new_name] = {
+                            "content": new_content,
+                            "category": new_category
+                        }
+                        save_templates()
+                        st.success(f"Template '{new_name}' updated.")
+                    else:
+                        st.error("Template content must include both {subject} and {input} placeholders.")
+                else:
+                    st.error("Please provide a new name, content, and category.")
+
+    if st.session_state.templates:
+        with st.expander("🗑️ Delete Templates"):
+            templates_to_delete = st.multiselect("Select templates to delete", list(st.session_state.templates.keys()))
+            if st.button("Delete Selected Templates"):
+                if templates_to_delete:
+                    for tmpl in templates_to_delete:
+                        del st.session_state.templates[tmpl]
+                    save_templates()
+                    st.success("Selected templates have been deleted.")
+                else:
+                    st.error("No templates selected for deletion.")
+
 def main():
     st.set_page_config(page_title="Custom Prompt Generator", page_icon="🧠")
 
-    # Sidebar Navigation
     st.sidebar.title("Navigation")
     page = st.sidebar.selectbox("Go to", ["User Interface", "Admin Interface", "About"])
 
@@ -43,7 +122,6 @@ def main():
         Welcome to the **Custom Prompt Generator**! Generate creative and detailed prompts tailored to your needs.
         """)
 
-        # Initialize session state for generated prompts and hidden prompts
         if "generated_prompts" not in st.session_state:
             st.session_state.generated_prompts = []
         if "hidden_prompts" not in st.session_state:
@@ -55,7 +133,8 @@ def main():
                 "Design a futuristic city that's entirely sustainable and eco-friendly."
             ]
 
-        # Input form for prompt details
+        load_templates()
+
         with st.form(key='prompt_form'):
             topic = st.text_input(
                 "**Topic:**",
@@ -77,7 +156,9 @@ def main():
                 help="Specify how many prompts you want to generate."
             )
 
-            # Hidden prompts selection
+            available_templates = list(st.session_state.templates.keys())
+            selected_template = st.selectbox("Select a template", ["None"] + available_templates)
+
             selected_hidden_prompts = st.multiselect(
                 "Select hidden prompts:",
                 st.session_state.hidden_prompts,
@@ -103,53 +184,23 @@ def main():
             )
             submit_button = st.form_submit_button(label='Generate Prompts')
 
-        # Custom prompt input and add button
         custom_prompt = st.text_input("Enter a custom prompt:")
         if st.button("Add Custom Prompt"):
             if custom_prompt:
                 st.session_state.hidden_prompts.append(custom_prompt)
                 st.success("Custom prompt added successfully!")
-                st.experimental_rerun()
+                st.rerun()
 
         if submit_button:
             if not topic:
                 st.warning("Please enter a topic.")
                 return
 
-            ai_prompt = f"""
-You are an advanced AI language model designed to generate creative and engaging writing prompts.
-
-**Task:** You are an AI prompt generator. Your task is to generate a creative and detailed prompt based on the following user request:
-
-- **Subject**: {topic}
-- **Details**: Consider all aspects of the subject and create a useful, creative prompt that can be used to instruct any AI model. Ensure the prompt is clear, structured, and includes all necessary details, without adding any extra commentary or fluff. Generate {num_prompts} unique, long, and detailed writing prompts about the topic '{topic}'. Each prompt should be engaging, thought-provoking, and provide enough context to inspire in-depth responses from the reader.
-
-**Requirements:**
-- **Letter**: The first letter of the 'PromptName'.
-- **PromptName**: A catchy and relevant title for the prompt starting with the specified 'Letter'.
-- **Categories**: A comma-separated list of categories or tags related to the prompt (e.g., "Science Fiction, Ethics, Technology").
-- **PromptText**: A detailed description of the prompt, containing rich context, background information, and an intriguing scenario or question.
-
-**Format:** Provide the output as a JSON array of objects. Ensure that the JSON is properly formatted without any syntax errors.
-
-**Example Output:**
-
-[
-  {{
-    "Letter": "A",
-    "PromptName": "Alternate Realities",
-    "Categories": "Parallel Universe, Choices, Consequences",
-    "PromptText": "In a world where every choice creates a new reality, a scientist discovers a way to traverse these alternate universes. As they explore the myriad outcomes of their own life choices, they face the dilemma of altering realities for personal gain. Write about the ethical and emotional challenges that come with this newfound power, and the impact on their sense of self."
-  }},
-  ...
-]
-
-**Instructions:**
-- Do not include any introductory or concluding text.
-- Only provide the JSON array as the output.
-- Ensure diversity in the prompts to cover different subtopics and perspectives related to '{topic}'.
-- Each prompt should be self-contained and provide enough detail to fully understand the scenario.
-"""
+            if selected_template != "None":
+                template = st.session_state.templates[selected_template]
+                ai_prompt = template["content"].format(subject=topic, input=topic)
+            else:
+                ai_prompt = generate_detailed_user_prompt()
 
             if selected_hidden_prompts:
                 ai_prompt += f"\n\n**Additional Instructions:**\nIncorporate the following hidden prompts into your generated prompts, adapting them to fit the main topic '{topic}':\n"
@@ -230,15 +281,16 @@ You are an advanced AI language model designed to generate creative and engaging
                         st.markdown(href, unsafe_allow_html=True)
 
                         st.markdown(f"<h3>Generated HTML Preview:</h3>", unsafe_allow_html=True)
-                        st.components.v1.html(html_content, height=600, scrolling=True)
+                        st.markdown(html_content, unsafe_allow_html=True)
                         logging.info("HTML content displayed successfully")
                     except Exception as e:
                         logging.error(f"Error generating or displaying HTML content: {str(e)}")
                         st.error(f"An error occurred while generating the HTML content: {str(e)}")
 
     elif page == "Admin Interface":
-        st.header("🔒 Admin Interface")
-        st.warning("Admin interface not implemented yet.")
+        admin_auth()
+        if st.session_state.authenticated:
+            admin_interface()
 
     elif page == "About":
         st.markdown("""
