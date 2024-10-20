@@ -37,6 +37,13 @@ def parse_ai_response(response_text):
                 continue
     return parsed_data
 
+def load_data():
+    try:
+        with open('prompt_data.pkl', 'rb') as f:
+            return pd.read_pickle(f)
+    except FileNotFoundError:
+        return pd.DataFrame(columns=["Categories", "PromptName", "PromptText", "Model"])
+
 def main():
     st.set_page_config(page_title="Custom Prompt Generator", page_icon="🧠")
 
@@ -63,6 +70,9 @@ def user_interface():
     if "generated_prompts" not in st.session_state:
         st.session_state.generated_prompts = []
 
+    # Load existing prompts
+    existing_prompts = load_data()
+
     # Input form for prompt details
     with st.form(key='prompt_form'):
         topic = st.text_input(
@@ -70,6 +80,17 @@ def user_interface():
             placeholder="e.g., AI, Quantum Computing, Climate Change",
             help="Enter the main topic for the prompts."
         )
+
+        # Add dropdown for category selection
+        categories = sorted(set(cat for cats in existing_prompts['Categories'] for cat in cats.split(',')))
+        selected_category = st.selectbox("Select Category (Optional)", [""] + categories, index=0)
+
+        # Add dropdown for prompt name selection (only show if category is selected)
+        prompt_names = []
+        if selected_category:
+            prompt_names = existing_prompts[existing_prompts['Categories'].str.contains(selected_category)]['PromptName'].tolist()
+        selected_prompt = st.selectbox("Select Prompt (Optional)", [""] + prompt_names, index=0)
+
         model = st.selectbox(
             "**Select AI Model:**",
             list(AVAILABLE_MODELS.keys()),
@@ -115,8 +136,19 @@ def user_interface():
         submit_button = st.form_submit_button(label='Generate Prompts')
 
     if submit_button:
-        if not topic:
-            st.warning("Please enter a topic.")
+        if selected_prompt:
+            # Use the selected prompt
+            selected_prompt_data = existing_prompts[existing_prompts['PromptName'] == selected_prompt].iloc[0]
+            st.session_state.generated_prompts = [{
+                "Letter": selected_prompt_data['PromptName'][0],
+                "PromptName": selected_prompt_data['PromptName'],
+                "Categories": selected_prompt_data['Categories'],
+                "PromptText": selected_prompt_data['PromptText']
+            }]
+            st.subheader("Selected Prompt:")
+            st.markdown(f"**{selected_prompt_data['PromptName']}** ({selected_prompt_data['Categories']}):\n{selected_prompt_data['PromptText']}")
+        elif not topic:
+            st.warning("Please enter a topic or select a prompt.")
         elif not openrouter_api_key:
             st.warning("Please provide your OpenRouter API Key.")
         else:
@@ -229,11 +261,11 @@ def about_page():
     This application uses advanced AI models to generate creative and engaging prompts based on your input. It's designed to help writers, educators, and creatives overcome writer's block and spark new ideas.
 
     ### How it works:
-    1. Enter a topic or subject.
-    2. Choose an AI model.
-    3. Set the number of prompts you want.
-    4. Adjust the creativity level.
-    5. Generate your custom prompts!
+    1. Enter a topic or subject, or select an existing prompt.
+    2. Choose an AI model (if generating new prompts).
+    3. Set the number of prompts you want (if generating new prompts).
+    4. Adjust the creativity level (if generating new prompts).
+    5. Generate your custom prompts or use the selected prompt!
 
     ### Features:
     - Multiple AI models to choose from.
@@ -241,6 +273,7 @@ def about_page():
     - Export options (CSV and HTML).
     - Categorized prompts for easy organization.
     - Admin interface for managing prompts and categories.
+    - Option to select existing prompts by category.
 
     Enjoy using the Custom Prompt Generator for your creative projects!
     """)
