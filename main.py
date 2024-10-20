@@ -1,4 +1,3 @@
-
 import streamlit as st
 import requests
 import json
@@ -9,18 +8,17 @@ import base64
 from utils import generate_html_content, AVAILABLE_MODELS
 
 # Set up logging
-logging.basicConfig(filename='app.log', level=logging.INFO, format='%(asctime)s:%(levelname)s:%(message)s')
+logging.basicConfig(filename='app.log', level=logging.INFO,
+                    format='%(asctime)s:%(levelname)s:%(message)s')
 
 def parse_ai_response(response_text):
     try:
-        # Attempt to parse the entire response as JSON
         parsed_data = json.loads(response_text)
         if isinstance(parsed_data, list):
             return parsed_data
     except json.JSONDecodeError:
-        # If parsing the entire response fails, try to find and parse individual JSON objects
         import re
-        json_objects = re.findall(r'\{[^{}]*\}', response_text)
+        json_objects = re.findall(r'\{[^{}]+?\}', response_text, re.DOTALL)
         parsed_data = []
         for obj in json_objects:
             try:
@@ -66,20 +64,22 @@ def main():
                 "**Number of Prompts:**",
                 min_value=1,
                 max_value=20,
-                value=5,
+                value=10,
                 step=1,
                 help="Specify how many prompts you want to generate."
             )
+
+            max_allowed_tokens = AVAILABLE_MODELS[model]['context_tokens'] - 500
             max_tokens = st.slider(
                 "**Max Tokens:**",
                 min_value=50,
-                max_value=min(500, AVAILABLE_MODELS[model]['context_tokens']),
-                value=min(200, AVAILABLE_MODELS[model]['context_tokens']),
+                max_value=max_allowed_tokens,
+                value=min(1000, max_allowed_tokens),
                 step=50,
-                help="Set the maximum number of tokens for each prompt."
+                help="Set the maximum number of tokens for the AI to generate."
             )
             creativity = st.slider(
-                "**Creativity Level:**",
+                "**Creativity Level (Temperature):**",
                 min_value=0.0,
                 max_value=1.0,
                 value=0.7,
@@ -93,21 +93,42 @@ def main():
                 st.warning("Please enter a topic.")
                 return
 
-            prompt = f"""Generate {num_prompts} unique and creative prompts about {topic}. Each prompt should be engaging and thought-provoking.
+            ai_prompt = f"""
+You are an advanced AI language model designed to generate creative and engaging writing prompts.
 
-            Format the output as a list of JSON objects, each containing 'Letter', 'PromptName', 'Categories', and 'PromptText' fields. Ensure that the letter and prompt name are closely related to the prompt's content.
+**Task:** You are an AI prompt generator. Your task is to generate a creative and detailed prompt based on the following user request:
 
-            Example format:
-            [
-              {{
-                "Letter": "A",
-                "PromptName": "Artistic Exploration",
-                "Categories": "Creativity, Visual Arts, Imagination",
-                "PromptText": "Describe a world where colors have sounds and music creates visible patterns in the air."
-              }},
-              ...
-            ]
-            """
+- **Subject**: {topic}
+- **Details**: Consider all aspects of the subject and create a useful, creative prompt that can be used to instruct any AI model. Ensure the prompt is clear, structured, and includes all necessary details, without adding any extra commentary or fluff. Generate {num_prompts} unique, long, and detailed writing prompts about the topic '{topic}'. Each prompt should be engaging, thought-provoking, and provide enough context to inspire in-depth responses from the reader.
+
+**Requirements:**
+- **Letter**: The first letter of the 'PromptName'.
+- **PromptName**: A catchy and relevant title for the prompt starting with the specified 'Letter'.
+- **Categories**: A comma-separated list of categories or tags related to the prompt (e.g., "Science Fiction, Ethics, Technology").
+- **PromptText**: A detailed description of the prompt, containing rich context, background information, and an intriguing scenario or question.
+
+**Format:** Provide the output as a JSON array of objects. Ensure that the JSON is properly formatted without any syntax errors.
+
+**Example Output:**
+
+[
+  {{
+    "Letter": "A",
+    "PromptName": "Alternate Realities",
+    "Categories": "Parallel Universe, Choices, Consequences",
+    "PromptText": "In a world where every choice creates a new reality, a scientist discovers a way to traverse these alternate universes. As they explore the myriad outcomes of their own life choices, they face the dilemma of altering realities for personal gain. Write about the ethical and emotional challenges that come with this newfound power, and the impact on their sense of self."
+  }},
+  ...
+]
+
+**Instructions:**
+- Do not include any introductory or concluding text.
+- Only provide the JSON array as the output.
+- Ensure diversity in the prompts to cover different subtopics and perspectives related to '{topic}'.
+- Each prompt should be self-contained and provide enough detail to fully understand the scenario.
+
+Generate the {num_prompts} prompts now.
+"""
 
             try:
                 response = requests.post(
@@ -119,7 +140,7 @@ def main():
                     json={
                         "model": AVAILABLE_MODELS[model]['id'],
                         "messages": [
-                            {"role": "user", "content": prompt}
+                            {"role": "user", "content": ai_prompt.strip()}
                         ],
                         "max_tokens": max_tokens,
                         "temperature": creativity,
@@ -139,8 +160,8 @@ def main():
                         return
 
                     st.subheader("Generated Prompts:")
-                    for item in generated_prompts:
-                        st.write(f"{item['Letter']}. {item['PromptName']} ({item['Categories']}): {item['PromptText']}")
+                    for idx, item in enumerate(generated_prompts, 1):
+                        st.write(f"**{idx}. {item['PromptName']}** ({item['Categories']}):\n{item['PromptText']}\n")
 
                     st.session_state.generated_prompts = generated_prompts
                 else:
@@ -155,7 +176,7 @@ def main():
 
             csv = df.to_csv(index=False)
             b64 = base64.b64encode(csv.encode()).decode()
-            href = f'<a href="data:file/csv;base64,{b64}" download="generated_prompts.csv">Download CSV File</a>'
+            href = f'<a href="data:file/csv;base64,{b64}" download="generated_prompts.csv">📥 Download CSV File</a>'
             st.markdown(href, unsafe_allow_html=True)
 
             with st.form(key='generate_html_form'):
@@ -164,10 +185,15 @@ def main():
                     try:
                         logging.info("Generate HTML button clicked")
                         logging.info(f"Generating HTML content for {len(st.session_state.generated_prompts)} prompts")
-                        
+
                         header_title = "Generated Prompts"
                         theme = "light"
-                        html_content = generate_html_content(st.session_state.generated_prompts, has_image_url=False, theme=theme, header_title=header_title)
+                        html_content = generate_html_content(
+                            st.session_state.generated_prompts,
+                            has_image_url=False,
+                            theme=theme,
+                            header_title=header_title
+                        )
 
                         logging.info(f"HTML content generated successfully. Length: {len(html_content)}")
 
