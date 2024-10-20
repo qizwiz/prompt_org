@@ -1,16 +1,28 @@
+# admin_interface.py
+
 import streamlit as st
 import pandas as pd
 import json
 import os
 
-def load_hidden_prompts():
-    if os.path.exists('hidden_prompts.json'):
-        with open('hidden_prompts.json', 'r') as f:
-            return json.load(f)
-    return []
+def load_prompts():
+    if os.path.exists('prompts.json'):
+        with open('prompts.json', 'r') as f:
+            data = json.load(f)
+            # Check if prompts are in old format (string values)
+            if data and isinstance(next(iter(data.values())), str):
+                # Convert to new format with 'content' and 'placeholders'
+                for key in data:
+                    data[key] = {
+                        'content': data[key],
+                        'placeholders': ['subject']
+                    }
+                save_prompts(data)
+            return data
+    return {}
 
-def save_hidden_prompts(prompts):
-    with open('hidden_prompts.json', 'w') as f:
+def save_prompts(prompts):
+    with open('prompts.json', 'w') as f:
         json.dump(prompts, f)
 
 def admin_interface():
@@ -23,42 +35,84 @@ def admin_interface():
     if not st.session_state.admin_authenticated:
         password = st.text_input("Enter admin password", type="password")
         if st.button("Login"):
-            if password == "admin123":  # Replace with a secure password mechanism
+            if password == "your_admin_password":  # Replace with your secure password
                 st.session_state.admin_authenticated = True
                 st.success("Authenticated successfully!")
             else:
                 st.error("Incorrect password")
 
     if st.session_state.admin_authenticated:
-        st.subheader("Manage Hidden Prompts")
+        st.subheader("Manage Prompt Templates")
 
-        hidden_prompts = load_hidden_prompts()
+        prompts = load_prompts()
 
-        # Display existing hidden prompts
-        if hidden_prompts:
-            st.write("Current Hidden Prompts:")
-            df = pd.DataFrame(hidden_prompts)
-            st.dataframe(df)
+        # Add new prompt template
+        with st.expander("➕ Add New Prompt Template"):
+            prompt_name = st.text_input("Prompt Name")
+            placeholder_keys = st.text_input("Placeholder Keys (comma-separated)", value="subject")
+            prompt_content = st.text_area("Prompt Content")
+            if st.button("Add Prompt Template"):
+                if prompt_name and prompt_content:
+                    # Create a list of placeholder keys
+                    placeholders = [key.strip() for key in placeholder_keys.split(',')]
+                    for key in placeholders:
+                        if f"{{{key}}}" not in prompt_content:
+                            st.error(f"Placeholder '{{{key}}}' not found in prompt content.")
+                            break
+                    else:
+                        prompts[prompt_name] = {
+                            "content": prompt_content,
+                            "placeholders": placeholders
+                        }
+                        save_prompts(prompts)
+                        st.success(f"Prompt template '{prompt_name}' added.")
+                else:
+                    st.error("Please provide a prompt name and content.")
 
-        # Add new hidden prompt
-        st.subheader("Add New Hidden Prompt")
-        new_prompt = st.text_area("Enter new hidden prompt")
-        if st.button("Add Prompt"):
-            if new_prompt:
-                hidden_prompts.append({"prompt": new_prompt})
-                save_hidden_prompts(hidden_prompts)
-                st.success("New hidden prompt added successfully!")
-            else:
-                st.warning("Please enter a prompt before adding.")
+        if prompts:
+            st.subheader("Existing Prompt Templates")
+            st.write("Here are the prompt templates you've created:")
+            for name in prompts.keys():
+                st.write(f"- **{name}**")
 
-        # Remove hidden prompt
-        if hidden_prompts:
-            st.subheader("Remove Hidden Prompt")
-            prompt_to_remove = st.selectbox("Select prompt to remove", [p["prompt"] for p in hidden_prompts])
-            if st.button("Remove Prompt"):
-                hidden_prompts = [p for p in hidden_prompts if p["prompt"] != prompt_to_remove]
-                save_hidden_prompts(hidden_prompts)
-                st.success("Hidden prompt removed successfully!")
+            # Edit existing prompt templates
+            with st.expander("✏️ Edit Existing Prompt Templates"):
+                selected_prompt = st.selectbox("Select a prompt to edit", list(prompts.keys()))
+                if selected_prompt:
+                    prompt_data = prompts[selected_prompt]
+                    new_name = st.text_input("New Prompt Name", value=selected_prompt, key='edit_name')
+                    new_placeholder_keys = st.text_input("New Placeholder Keys (comma-separated)", value=', '.join(prompt_data["placeholders"]), key='edit_placeholders')
+                    new_content = st.text_area("New Prompt Content", value=prompt_data["content"], key='edit_content')
+                    if st.button("Update Prompt Template"):
+                        if new_name and new_content:
+                            placeholders = [key.strip() for key in new_placeholder_keys.split(',')]
+                            for key in placeholders:
+                                if f"{{{key}}}" not in new_content:
+                                    st.error(f"Placeholder '{{{key}}}' not found in prompt content.")
+                                    break
+                            else:
+                                if new_name != selected_prompt:
+                                    del prompts[selected_prompt]
+                                prompts[new_name] = {
+                                    "content": new_content,
+                                    "placeholders": placeholders
+                                }
+                                save_prompts(prompts)
+                                st.success(f"Prompt template '{new_name}' updated.")
+                        else:
+                            st.error("Please provide a new name and content.")
+
+            # Delete prompt templates
+            with st.expander("🗑️ Delete Prompt Templates"):
+                prompts_to_delete = st.multiselect("Select prompts to delete", list(prompts.keys()))
+                if st.button("Delete Selected Prompt Templates"):
+                    if prompts_to_delete:
+                        for prm in prompts_to_delete:
+                            del prompts[prm]
+                        save_prompts(prompts)
+                        st.success("Selected prompt templates have been deleted.")
+                    else:
+                        st.error("No prompt templates selected for deletion.")
 
 if __name__ == "__main__":
     admin_interface()

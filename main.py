@@ -43,62 +43,24 @@ def admin_auth():
 def load_templates():
     try:
         with open('templates.json', 'r') as f:
-            st.session_state.templates = json.load(f)
+            return json.load(f)
     except FileNotFoundError:
-        st.session_state.templates = {}
+        return {}
 
-def save_templates():
+def save_templates(templates):
     with open('templates.json', 'w') as f:
-        json.dump(st.session_state.templates, f)
+        json.dump(templates, f)
 
-def admin_interface():
-    st.header("🔒 Admin Interface")
+def load_hidden_prompts():
+    try:
+        with open('hidden_prompts.json', 'r') as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {}
 
-    load_templates()
-
-    st.subheader("Manage Templates")
-
-    with st.expander("➕ Add New Template"):
-        template_name = st.text_input("Template Name")
-        template_content = st.text_area("Template Content (use {subject} as a placeholder)")
-        if st.button("Add Template"):
-            if template_name and template_content:
-                if "{subject}" in template_content:
-                    st.session_state.templates[template_name] = template_content
-                    save_templates()
-                    st.success(f"Template '{template_name}' added.")
-                else:
-                    st.error("Template content must include the {subject} placeholder.")
-            else:
-                st.error("Please provide a template name and content.")
-
-    if st.session_state.templates:
-        with st.expander("✏️ Edit Existing Templates"):
-            selected_template = st.selectbox("Select a template to edit", list(st.session_state.templates.keys()))
-            new_name = st.text_input("New Template Name", value=selected_template)
-            new_content = st.text_area("New Template Content", value=st.session_state.templates[selected_template])
-            if st.button("Update Template"):
-                if new_name and new_content:
-                    if "{subject}" in new_content:
-                        del st.session_state.templates[selected_template]
-                        st.session_state.templates[new_name] = new_content
-                        save_templates()
-                        st.success(f"Template '{new_name}' updated.")
-                    else:
-                        st.error("Template content must include the {subject} placeholder.")
-                else:
-                    st.error("Please provide a new name and content.")
-
-        with st.expander("🗑️ Delete Templates"):
-            templates_to_delete = st.multiselect("Select templates to delete", list(st.session_state.templates.keys()))
-            if st.button("Delete Selected Templates"):
-                if templates_to_delete:
-                    for tmpl in templates_to_delete:
-                        del st.session_state.templates[tmpl]
-                    save_templates()
-                    st.success("Selected templates have been deleted.")
-                else:
-                    st.error("No templates selected for deletion.")
+def save_hidden_prompts(hidden_prompts):
+    with open('hidden_prompts.json', 'w') as f:
+        json.dump(hidden_prompts, f)
 
 def main():
     st.set_page_config(page_title="Custom Prompt Generator", page_icon="🧠")
@@ -116,7 +78,8 @@ def main():
         if "generated_prompts" not in st.session_state:
             st.session_state.generated_prompts = []
 
-        load_templates()
+        templates = load_templates()
+        hidden_prompts = load_hidden_prompts()
 
         with st.form(key='prompt_form'):
             topic = st.text_input(
@@ -134,13 +97,16 @@ def main():
                 "**Number of Prompts:**",
                 min_value=1,
                 max_value=20,
-                value=10,
+                value=5,
                 step=1,
                 help="Specify how many prompts you want to generate."
             )
 
-            available_templates = list(st.session_state.templates.keys())
+            available_templates = list(templates.keys())
             selected_template = st.selectbox("Select a template", ["None"] + available_templates)
+
+            available_hidden_prompts = list(hidden_prompts.keys())
+            selected_hidden_prompts = st.multiselect("Select hidden prompts", available_hidden_prompts)
 
             max_allowed_tokens = AVAILABLE_MODELS[model]['context_tokens'] - 500
             max_tokens = st.slider(
@@ -167,12 +133,17 @@ def main():
                 return
 
             if selected_template != "None":
-                template = st.session_state.templates[selected_template]
+                template = templates[selected_template]
                 ai_prompt = template.format(subject=topic)
             else:
                 ai_prompt = generate_detailed_user_prompt()
 
-            ai_prompt += f"\nGenerate the {num_prompts} prompts now."
+            if selected_hidden_prompts:
+                ai_prompt += "\n\nIncorporate the following hidden prompts into your generated prompts:\n"
+                for prompt_name in selected_hidden_prompts:
+                    ai_prompt += f"- {hidden_prompts[prompt_name]}\n"
+
+            ai_prompt += f"\nGenerate {num_prompts} prompts now."
 
             try:
                 response = requests.post(
@@ -205,7 +176,10 @@ def main():
 
                     st.subheader("Generated Prompts:")
                     for idx, item in enumerate(generated_prompts, 1):
-                        st.write(f"**{idx}. {item['PromptName']}** ({item['Categories']}):\n{item['PromptText']}\n")
+                        st.write(f"**{idx}. {item['PromptName']}**")
+                        st.write(item['PromptText'])
+                        st.write(f"Categories: {item['Categories']}")
+                        st.write("---")
 
                     st.session_state.generated_prompts = generated_prompts
                 else:
@@ -214,11 +188,7 @@ def main():
                 st.error(f"An error occurred: {str(e)}")
 
         if st.session_state.generated_prompts:
-            st.subheader("Prompt Details")
-            df = pd.DataFrame(st.session_state.generated_prompts)
-            st.dataframe(df)
-
-            csv = df.to_csv(index=False)
+            csv = pd.DataFrame(st.session_state.generated_prompts).to_csv(index=False)
             b64 = base64.b64encode(csv.encode()).decode()
             href = f'<a href="data:file/csv;base64,{b64}" download="generated_prompts.csv">📥 Download CSV File</a>'
             st.markdown(href, unsafe_allow_html=True)
@@ -264,22 +234,123 @@ def main():
         This application uses advanced AI models to generate creative and engaging prompts based on your input. It's designed to help writers, educators, and creatives overcome writer's block and spark new ideas.
 
         ### How it works:
+
         1. Enter a topic or subject
         2. Choose an AI model
         3. Set the number of prompts you want
         4. Adjust the creativity level
-        5. Optionally select a template
+        5. Optionally select a template and hidden prompts
         6. Generate your custom prompts!
 
         ### Features:
         - Multiple AI models to choose from
         - Adjustable creativity settings
         - Custom prompt templates
+        - Hidden prompts for additional inspiration
         - Export options (CSV and HTML)
         - Categorized prompts for easy organization
 
         Enjoy using the Custom Prompt Generator for your creative projects!
         """)
+
+def admin_interface():
+    st.header("🔒 Admin Interface")
+
+    # Load templates and hidden prompts
+    templates = load_templates()
+    hidden_prompts = load_hidden_prompts()
+
+    # Template Management
+    st.subheader("Manage Templates")
+
+    # Add a new template
+    with st.expander("➕ Add New Template"):
+        template_name = st.text_input("Template Name")
+        template_content = st.text_area("Template Content (use {subject} as a placeholder)")
+        if st.button("Add Template"):
+            if template_name and template_content:
+                if "{subject}" in template_content:
+                    templates[template_name] = template_content
+                    save_templates(templates)
+                    st.success(f"Template '{template_name}' added.")
+                else:
+                    st.error("Template content must include the {subject} placeholder.")
+            else:
+                st.error("Please provide a template name and content.")
+
+    # Edit existing templates
+    if templates:
+        with st.expander("✏️ Edit Existing Templates"):
+            selected_template = st.selectbox("Select a template to edit", list(templates.keys()))
+            new_name = st.text_input("New Template Name", value=selected_template)
+            new_content = st.text_area("New Template Content", value=templates[selected_template])
+            if st.button("Update Template"):
+                if new_name and new_content:
+                    if "{subject}" in new_content:
+                        del templates[selected_template]
+                        templates[new_name] = new_content
+                        save_templates(templates)
+                        st.success(f"Template '{new_name}' updated.")
+                    else:
+                        st.error("Template content must include the {subject} placeholder.")
+                else:
+                    st.error("Please provide a new name and content.")
+
+    # Delete templates
+    if templates:
+        with st.expander("🗑️ Delete Templates"):
+            templates_to_delete = st.multiselect("Select templates to delete", list(templates.keys()))
+            if st.button("Delete Selected Templates"):
+                if templates_to_delete:
+                    for tmpl in templates_to_delete:
+                        del templates[tmpl]
+                    save_templates(templates)
+                    st.success("Selected templates have been deleted.")
+                else:
+                    st.error("No templates selected for deletion.")
+
+    # Hidden Prompts Management
+    st.subheader("Manage Hidden Prompts")
+
+    # Add a new hidden prompt
+    with st.expander("➕ Add New Hidden Prompt"):
+        hidden_prompt_name = st.text_input("Hidden Prompt Name")
+        hidden_prompt_content = st.text_area("Hidden Prompt Content")
+        if st.button("Add Hidden Prompt"):
+            if hidden_prompt_name and hidden_prompt_content:
+                hidden_prompts[hidden_prompt_name] = hidden_prompt_content
+                save_hidden_prompts(hidden_prompts)
+                st.success(f"Hidden prompt '{hidden_prompt_name}' added.")
+            else:
+                st.error("Please provide a hidden prompt name and content.")
+
+    # Edit existing hidden prompts
+    if hidden_prompts:
+        with st.expander("✏️ Edit Existing Hidden Prompts"):
+            selected_hidden_prompt = st.selectbox("Select a hidden prompt to edit", list(hidden_prompts.keys()))
+            new_hidden_name = st.text_input("New Hidden Prompt Name", value=selected_hidden_prompt)
+            new_hidden_content = st.text_area("New Hidden Prompt Content", value=hidden_prompts[selected_hidden_prompt])
+            if st.button("Update Hidden Prompt"):
+                if new_hidden_name and new_hidden_content:
+                    del hidden_prompts[selected_hidden_prompt]
+                    hidden_prompts[new_hidden_name] = new_hidden_content
+                    save_hidden_prompts(hidden_prompts)
+                    st.success(f"Hidden prompt '{new_hidden_name}' updated.")
+                else:
+                    st.error("Please provide a new name and content for the hidden prompt.")
+
+    # Delete hidden prompts
+    if hidden_prompts:
+        with st.expander("🗑️ Delete Hidden Prompts"):
+            hidden_prompts_to_delete = st.multiselect("Select hidden prompts to delete", list(hidden_prompts.keys()))
+            if st.button("Delete Selected Hidden Prompts"):
+                if hidden_prompts_to_delete:
+                    for prompt in hidden_prompts_to_delete:
+                        del hidden_prompts[prompt]
+                    save_hidden_prompts(hidden_prompts)
+                    st.success("Selected hidden prompts have been deleted.")
+                else:
+                    st.error("No hidden prompts selected for deletion.")
 
 if __name__ == "__main__":
     main()
