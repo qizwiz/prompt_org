@@ -10,7 +10,7 @@ from utils import generate_html_content, AVAILABLE_MODELS
 # Set up logging
 logging.basicConfig(
     filename='app.log',
-    level=logging.INFO,
+    level=logging.DEBUG,
     format='%(asctime)s:%(levelname)s:%(message)s'
 )
 
@@ -40,8 +40,11 @@ def parse_ai_response(response_text):
 def load_data():
     try:
         with open('prompt_data.pkl', 'rb') as f:
-            return pd.read_pickle(f)
+            data = pd.read_pickle(f)
+        logging.info(f"Loaded data with {len(data)} prompts")
+        return data
     except FileNotFoundError:
+        logging.warning("prompt_data.pkl not found. Creating new DataFrame.")
         return pd.DataFrame(columns=["Categories", "PromptName", "PromptText", "Model"])
 
 def main():
@@ -76,14 +79,22 @@ def user_interface():
     # Input form for prompt details
     with st.form(key='prompt_form'):
         # Add category selection
-        categories = sorted(set(cat for cats in existing_prompts['Categories'] for cat in cats.split(',')))
-        selected_category = st.selectbox("Select Category", [""] + categories)
+        categories = sorted(set(cat.strip() for cats in existing_prompts['Categories'] for cat in cats.split(',')))
+        categories = [""] + categories
+        selected_category = st.selectbox("Select Category", categories)
+        logging.debug(f"Selected category: {selected_category}")
 
         # Update prompt name selection
-        prompt_names = []
+        prompt_names = [""]
         if selected_category:
-            prompt_names = existing_prompts[existing_prompts['Categories'].str.contains(selected_category)]['PromptName'].tolist()
-        selected_prompt = st.selectbox("Select Prompt", [""] + prompt_names, disabled=not selected_category)
+            prompt_names += existing_prompts[existing_prompts['Categories'].str.contains(selected_category, case=False, na=False)]['PromptName'].tolist()
+            logging.debug(f"Prompts for category '{selected_category}': {prompt_names}")
+        else:
+            prompt_names += existing_prompts['PromptName'].tolist()
+            logging.debug("No category selected, showing all prompts")
+
+        selected_prompt = st.selectbox("Select Prompt", prompt_names, disabled=not selected_category)
+        logging.debug(f"Selected prompt: {selected_prompt}")
 
         # Remove the disabled attribute from the topic input
         topic = st.text_input("Topic:")
@@ -134,6 +145,7 @@ def user_interface():
         submit_button = st.form_submit_button(label='Generate Prompts')
 
     if submit_button:
+        logging.info(f"Generate Prompts button clicked. Selected prompt: {selected_prompt}, Topic: {topic}")
         if selected_prompt and topic:
             # Use both selected prompt and topic
             selected_prompt_data = existing_prompts[existing_prompts['PromptName'] == selected_prompt].iloc[0]
