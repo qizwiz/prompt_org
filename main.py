@@ -43,18 +43,17 @@ def main():
         Welcome to the **Custom Prompt Generator**! Generate creative and detailed prompts tailored to your needs.
         """)
 
-        # Initialize session state for generated prompts
+        # Initialize session state for generated prompts and hidden prompts
         if "generated_prompts" not in st.session_state:
             st.session_state.generated_prompts = []
-
-        # Hidden prompts
-        hidden_prompts = [
-            "Write a story about a time traveler who accidentally changes a major historical event.",
-            "Describe a world where humans can communicate telepathically with animals.",
-            "Create a dialogue between two AI systems debating the nature of consciousness.",
-            "Imagine a society where aging has been cured, and explore its implications.",
-            "Design a futuristic city that's entirely sustainable and eco-friendly."
-        ]
+        if "hidden_prompts" not in st.session_state:
+            st.session_state.hidden_prompts = [
+                "Write a story about a time traveler who accidentally changes a major historical event.",
+                "Describe a world where humans can communicate telepathically with animals.",
+                "Create a dialogue between two AI systems debating the nature of consciousness.",
+                "Imagine a society where aging has been cured, and explore its implications.",
+                "Design a futuristic city that's entirely sustainable and eco-friendly."
+            ]
 
         # Input form for prompt details
         with st.form(key='prompt_form'):
@@ -79,13 +78,11 @@ def main():
             )
 
             # Hidden prompts selection
-            use_hidden_prompts = st.checkbox("Use hidden prompts")
-            if use_hidden_prompts:
-                selected_hidden_prompts = st.multiselect(
-                    "Select hidden prompts:",
-                    hidden_prompts,
-                    format_func=lambda x: x[:50] + "..." if len(x) > 50 else x
-                )
+            selected_hidden_prompts = st.multiselect(
+                "Select hidden prompts:",
+                st.session_state.hidden_prompts,
+                format_func=lambda x: x[:50] + "..." if len(x) > 50 else x
+            )
 
             max_allowed_tokens = AVAILABLE_MODELS[model]['context_tokens'] - 500
             max_tokens = st.slider(
@@ -105,6 +102,14 @@ def main():
                 help="Adjust the creativity of the generated prompts."
             )
             submit_button = st.form_submit_button(label='Generate Prompts')
+
+        # Custom prompt input and add button
+        custom_prompt = st.text_input("Enter a custom prompt:")
+        if st.button("Add Custom Prompt"):
+            if custom_prompt:
+                st.session_state.hidden_prompts.append(custom_prompt)
+                st.success("Custom prompt added successfully!")
+                st.experimental_rerun()
 
         if submit_button:
             if not topic:
@@ -146,7 +151,7 @@ You are an advanced AI language model designed to generate creative and engaging
 - Each prompt should be self-contained and provide enough detail to fully understand the scenario.
 """
 
-            if use_hidden_prompts and selected_hidden_prompts:
+            if selected_hidden_prompts:
                 ai_prompt += f"\n\n**Additional Instructions:**\nIncorporate the following hidden prompts into your generated prompts, adapting them to fit the main topic '{topic}':\n"
                 for idx, hidden_prompt in enumerate(selected_hidden_prompts, 1):
                     ai_prompt += f"{idx}. {hidden_prompt}\n"
