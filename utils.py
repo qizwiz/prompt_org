@@ -22,31 +22,25 @@ def process_csv(df: pd.DataFrame, has_image_url: bool, upload_option: str) -> Li
         }
         required_columns = ["Letter", "PersonaName", "Categories", "ImageURL", "PromptText"]
 
-    # Rename columns based on mapping
     df = df.rename(columns=column_mapping)
 
-    # Ensure all required columns are present
     for col in required_columns:
         if col not in df.columns:
-            df[col] = ""  # Add missing columns with empty strings
+            df[col] = ""
 
-    # Fill NaNs with empty strings
     df = df.fillna("")
 
-    # Data Validation
     required_fields_for_validation = ["Letter", "Categories", "PromptText"]
     if has_image_url:
         required_fields_for_validation.extend(["PersonaName", "ImageURL"])
     else:
         required_fields_for_validation.append("PromptName")
 
-    # Check for missing values in required fields
     for field in required_fields_for_validation:
         if df[field].eq("").any():
             missing_rows = df[df[field] == ""].index.tolist()
             raise ValueError(f"Missing values in required column '{field}' at rows: {missing_rows}")
 
-    # Convert DataFrame to list of dictionaries
     return df[required_columns].to_dict("records")
 
 def process_json(data: List[Dict[str, Any]], has_image_url: bool, upload_option: str) -> List[Dict[str, Any]]:
@@ -61,7 +55,6 @@ def process_json(data: List[Dict[str, Any]], has_image_url: bool, upload_option:
         for key in required_keys:
             processed_item[key] = item.get(key, "")
 
-        # Data Validation
         for key in required_keys:
             if processed_item.get(key, "") == "":
                 raise ValueError(f"Missing value for key '{key}' in item: {processed_item}")
@@ -71,39 +64,29 @@ def process_json(data: List[Dict[str, Any]], has_image_url: bool, upload_option:
     return processed_data
 
 def generate_html_content(data: List[Dict[str, Any]], has_image_url: bool, theme: str, header_title: str) -> str:
-    """Generate HTML content from the processed data."""
-    # Precompute variables for the HTML content
     css_styles = get_css_styles()
     search_column_0 = 'Persona Name' if has_image_url else 'Letter'
-    search_column_2 = 2  # Categories/Tags column
-    search_column_3 = 3  # Prompt Text column
+    search_column_2 = 2
+    search_column_3 = 3
 
-    # Start building the HTML content using f-strings
     html_content = f"""
 <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <title>{header_title}</title>
-<!-- Responsive Design -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<!-- Include Bootstrap CSS for Responsive Design -->
 <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-<!-- Include Google Fonts -->
 <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:400,700&display=swap">
 <style>
 {css_styles}
 </style>
 </head>
 <body>
-<!-- Dark Mode Toggle -->
 <button id="darkModeToggle" class="btn btn-secondary">Toggle Dark Mode</button>
-<!-- Main Heading -->
 <h1 class="main-heading">{header_title}</h1>
-<!-- Search and Filters -->
 <div class="search-bar">
 <input type="text" id="searchInput" onkeyup="searchTable()" placeholder="Search..." class="form-control">
-<!-- Advanced Search -->
 <select id="searchColumn" class="form-control">
 <option value="all">All Columns</option>
 <option value="0">{search_column_0}</option>
@@ -111,22 +94,17 @@ def generate_html_content(data: List[Dict[str, Any]], has_image_url: bool, theme
 <option value="{search_column_3}">Prompt Text</option>
 </select>
 </div>
-<!-- Navigation -->
 <nav id="navigation">
-<!-- Alphabet Navigation -->
 """
-    # Generate alphabetical navigation with letters that have entries
     letters = sorted(set(item['Letter'].upper() for item in data if item['Letter']))
     for letter in letters:
         html_content += f'<a href="#section-{letter}">{letter}</a> '
 
-    # Categories Button
     html_content += '''
 <button type="button" data-toggle="modal" data-target="#categoriesModal">Categories</button>
 </nav>
 <div id="content">
 '''
-    # Group data by letters
     data_by_letter = {}
     for item in data:
         letter = item['Letter'].upper()
@@ -134,9 +112,8 @@ def generate_html_content(data: List[Dict[str, Any]], has_image_url: bool, theme
             data_by_letter[letter] = []
         data_by_letter[letter].append(item)
 
-    # Generate content for each letter with entries
-    entry_id = 1  # For unique IDs
-    categories_dict = {}  # For categories modal
+    entry_id = 1
+    categories_dict = {}
 
     for letter in letters:
         html_content += f'<div class="letter-section" id="section-{letter}"><h2>{letter}</h2>\n'
@@ -145,7 +122,6 @@ def generate_html_content(data: List[Dict[str, Any]], has_image_url: bool, theme
 <thead>
 <tr>
 '''
-        # Determine headers based on the upload option
         if has_image_url:
             headers = ['Persona Name', 'Image', 'Categories/Tags', 'Prompt Text', 'Copy Prompt']
         else:
@@ -173,14 +149,10 @@ def generate_html_content(data: List[Dict[str, Any]], has_image_url: bool, theme
             categories = item.get('Categories', '')
             prompt_text = item.get('PromptText', '').replace('\n', '<br>')
             categories_list = [cat.strip() for cat in categories.split(',') if cat.strip()]
-            # Update categories_dict
             for category in categories_list:
                 if category not in categories_dict:
                     categories_dict[category] = []
                 categories_dict[category].append({'id': f'entry-{entry_id}', 'name': name_field})
-
-            # Encode prompt_text to JSON string
-            sanitized_prompt_text = json.dumps(item.get("PromptText", ""))
 
             html_content += f'''
 <tr id="entry-{entry_id}">
@@ -200,8 +172,7 @@ def generate_html_content(data: List[Dict[str, Any]], has_image_url: bool, theme
                     html_content += ', '
             html_content += '</td>\n'
             html_content += f'    <td class="prompt-text">{prompt_text}</td>\n'
-            # Use the JSON encoded text in the onclick handler
-            html_content += f'    <td><button class="btn btn-primary copy-button" onclick="copyText({sanitized_prompt_text})">Copy</button></td>\n'
+            html_content += f'    <td><button class="btn btn-primary copy-button" onclick="copyText(this)" data-prompt="{entry_id}">Copy</button></td>\n'
             html_content += '</tr>\n'
 
             entry_id += 1
@@ -212,9 +183,7 @@ def generate_html_content(data: List[Dict[str, Any]], has_image_url: bool, theme
 </div>
 '''
 
-    # Categories Modal
     html_content += '''
-<!-- Categories Modal -->
 <div class="modal fade" id="categoriesModal" tabindex="-1" role="dialog" aria-labelledby="categoriesModalLabel" aria-hidden="true">
   <div class="modal-dialog modal-dialog-scrollable" role="document">
     <div class="modal-content">
@@ -227,12 +196,10 @@ def generate_html_content(data: List[Dict[str, Any]], has_image_url: bool, theme
       <div class="modal-body">
         <ul class="category-list" id="categoryList">
 '''
-    # List of Categories
     for category in sorted(categories_dict.keys()):
         html_content += f'<li><a href="#" onclick="showEntriesByCategory(`{category}`);">{category}</a></li>\n'
     html_content += '''
         </ul>
-        <!-- Entries by Category -->
         <div id="entriesByCategory" style="display:none;">
           <h5 id="selectedCategory"></h5>
           <ul class="entry-list" id="entryList">
@@ -246,29 +213,30 @@ def generate_html_content(data: List[Dict[str, Any]], has_image_url: bool, theme
     </div>
   </div>
 </div>
-<!-- End of Categories Modal -->
 </div>
 '''
 
-    # Include scripts
     html_content += '''
-<!-- Include jQuery and Bootstrap JS -->
 <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.min.js"></script>
 <script>
-// Data structures for categories and entries
 var categories = {};
 '''
 
-    # Generate JavaScript categories object
     categories_json = json.dumps(categories_dict)
     html_content += f'categories = {categories_json};\n'
 
-    # Add JavaScript functions
     html_content += '''
-function copyText(text) {
-    navigator.clipboard.writeText(JSON.parse(text))
-        .then(() => alert('Text copied!'))
+function copyText(button) {
+    var row = button.closest('tr');
+    var promptText = row.querySelector('.prompt-text').innerText;
+    navigator.clipboard.writeText(promptText)
+        .then(() => {
+            button.textContent = 'Copied!';
+            setTimeout(() => {
+                button.textContent = 'Copy';
+            }, 2000);
+        })
         .catch(err => console.error('Error copying text: ', err));
 }
 
@@ -328,7 +296,6 @@ function sortTable(header, columnIndex) {
     rows.forEach(function(row) {
         tbody.appendChild(row);
     });
-    // Toggle sort direction
     header.classList.toggle('asc', !ascending);
     header.classList.toggle('desc', ascending);
 }
@@ -347,13 +314,11 @@ function showEntriesByCategory(category) {
         a.addEventListener('click', function(e) {
             e.preventDefault();
             $('#categoriesModal').modal('hide');
-            // Wait for the modal to fully hide, then scroll
             $('#categoriesModal').on('hidden.bs.modal', function () {
                 var target = document.getElementById(entry.id);
                 if (target) {
                     target.scrollIntoView({ behavior: 'smooth' });
                 }
-                // Remove the event listener to prevent it from firing multiple times
                 $('#categoriesModal').off('hidden.bs.modal');
             });
         });
@@ -362,7 +327,7 @@ function showEntriesByCategory(category) {
     });
     document.getElementById('categoryList').style.display = 'none';
     document.getElementById('modalTitle').innerText = 'Entries in ' + category;
-    $('#categoriesModal').modal('show'); // Ensure the modal is shown
+    $('#categoriesModal').modal('show');
 }
 
 function backToCategories() {
@@ -371,7 +336,6 @@ function backToCategories() {
     document.getElementById('modalTitle').innerText = 'Categories';
 }
 
-// Dark Mode Toggle Functionality
 document.getElementById('darkModeToggle').addEventListener('click', function() {
     document.body.classList.toggle('dark-mode');
 });
@@ -382,7 +346,6 @@ document.getElementById('darkModeToggle').addEventListener('click', function() {
     return html_content
 
 def get_css_styles() -> str:
-    """Return CSS styles for the HTML content."""
     css_styles = '''
 body {
     font-family: 'Roboto', sans-serif;
@@ -514,7 +477,6 @@ body.dark-mode .category-tags {
 .category-tags a:hover {
     text-decoration: underline;
 }
-/* Modal Styling */
 .modal-content {
     color: #333;
 }
@@ -537,5 +499,4 @@ body.dark-mode .modal-header, body.dark-mode .modal-footer {
 AVAILABLE_MODELS = {
     "Ministral 8B": {"id": "mistralai/ministral-8b", "context_tokens": 128000},
     "Ministral 3B": {"id": "mistralai/ministral-3b", "context_tokens": 128000},
-    # Add other models as needed
 }
