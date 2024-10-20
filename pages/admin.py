@@ -1,18 +1,14 @@
 import streamlit as st
 import pandas as pd
 from utils import AVAILABLE_MODELS
-import json
-import os
 
 def load_data():
     try:
         with open('prompt_data.pkl', 'rb') as f:
             data = pd.read_pickle(f)
-        if isinstance(data, dict):
-            return pd.DataFrame.from_dict(data, orient='index')
         return data
     except FileNotFoundError:
-        return pd.DataFrame(columns=["Letter", "PromptName", "Categories", "PromptText"])
+        return pd.DataFrame(columns=["Categories", "PromptName", "PromptText", "Model"])
 
 def save_data(data):
     data.to_pickle('prompt_data.pkl')
@@ -34,22 +30,20 @@ def admin_interface():
     # Add new prompt
     st.subheader("Add New Prompt")
     with st.form("new_prompt_form"):
-        letter = st.text_input("Letter", max_chars=1)
-        prompt_name = st.text_input("Prompt Name")
         categories = st.text_input("Categories (comma-separated)")
+        prompt_name = st.text_input("Prompt Name")
         prompt_text = st.text_area("Prompt Text")
         model = st.selectbox("AI Model", list(AVAILABLE_MODELS.keys()))
         
         if st.form_submit_button("Add Prompt"):
-            if letter and prompt_name and categories and prompt_text:
+            if categories and prompt_name and prompt_text:
                 new_row = {
-                    "Letter": letter.upper(),
-                    "PromptName": prompt_name,
                     "Categories": categories,
+                    "PromptName": prompt_name,
                     "PromptText": prompt_text,
                     "Model": model
                 }
-                data = data.append(new_row, ignore_index=True)
+                data = pd.concat([data, pd.DataFrame([new_row])], ignore_index=True)
                 save_data(data)
                 st.success("New prompt added successfully!")
             else:
@@ -62,14 +56,13 @@ def admin_interface():
         edit_index = data[data['PromptName'] == prompt_to_edit].index[0]
         
         with st.form("edit_prompt_form"):
-            edit_letter = st.text_input("Letter", data.loc[edit_index, 'Letter'], max_chars=1)
-            edit_prompt_name = st.text_input("Prompt Name", data.loc[edit_index, 'PromptName'])
             edit_categories = st.text_input("Categories", data.loc[edit_index, 'Categories'])
+            edit_prompt_name = st.text_input("Prompt Name", data.loc[edit_index, 'PromptName'])
             edit_prompt_text = st.text_area("Prompt Text", data.loc[edit_index, 'PromptText'])
             edit_model = st.selectbox("AI Model", list(AVAILABLE_MODELS.keys()), index=list(AVAILABLE_MODELS.keys()).index(data.loc[edit_index, 'Model']))
             
             if st.form_submit_button("Update Prompt"):
-                data.loc[edit_index] = [edit_letter.upper(), edit_prompt_name, edit_categories, edit_prompt_text, edit_model]
+                data.loc[edit_index] = [edit_categories, edit_prompt_name, edit_prompt_text, edit_model]
                 save_data(data)
                 st.success("Prompt updated successfully!")
     
