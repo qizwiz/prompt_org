@@ -75,28 +75,30 @@ def user_interface():
 
     # Load existing prompts
     existing_prompts = load_data()
+    logging.debug(f"Loaded existing prompts: {existing_prompts.to_dict('records')}")
 
     # Input form for prompt details
     with st.form(key='prompt_form'):
         # Add category selection
-        categories = sorted(set(cat.strip() for cats in existing_prompts['Categories'] for cat in cats.split(',')))
-        categories = [""] + categories
+        all_categories = set(cat.strip() for cats in existing_prompts['Categories'] for cat in cats.split(',') if cats)
+        categories = [""] + sorted(all_categories)
         selected_category = st.selectbox("Select Category", categories)
+        logging.debug(f"All categories: {categories}")
         logging.debug(f"Selected category: {selected_category}")
 
         # Update prompt name selection
-        prompt_names = [""]
         if selected_category:
-            prompt_names += existing_prompts[existing_prompts['Categories'].str.contains(selected_category, case=False, na=False)]['PromptName'].tolist()
-            logging.debug(f"Prompts for category '{selected_category}': {prompt_names}")
+            prompt_names = existing_prompts[existing_prompts['Categories'].str.contains(selected_category, case=False, na=False)]['PromptName'].tolist()
+            logging.debug(f"Filtered prompts for category '{selected_category}': {prompt_names}")
         else:
-            prompt_names += existing_prompts['PromptName'].tolist()
-            logging.debug("No category selected, showing all prompts")
+            prompt_names = existing_prompts['PromptName'].tolist()
+            logging.debug(f"All prompts (no category selected): {prompt_names}")
 
-        selected_prompt = st.selectbox("Select Prompt", prompt_names, disabled=not selected_category)
+        prompt_names = [""] + sorted(prompt_names)
+        selected_prompt = st.selectbox("Select Prompt", prompt_names)
         logging.debug(f"Selected prompt: {selected_prompt}")
 
-        # Remove the disabled attribute from the topic input
+        # Topic input
         topic = st.text_input("Topic:")
 
         model = st.selectbox(
