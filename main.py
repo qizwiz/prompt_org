@@ -105,11 +105,12 @@ def main():
             available_templates = list(templates.keys())
             selected_template = st.selectbox("Select a template", ["None"] + available_templates)
 
-            available_hidden_prompts = list(hidden_prompts.keys())
-            selected_hidden_prompts = st.multiselect("Select hidden prompts", available_hidden_prompts)
-
             # Add custom template input
             user_template = st.text_area("Custom Template (optional)", placeholder="Enter your custom template here. Use {subject} as a placeholder for the topic.")
+
+            # Add hidden prompts selection
+            available_hidden_prompts = list(hidden_prompts.keys())
+            selected_hidden_prompts = st.multiselect("Select hidden prompts", available_hidden_prompts)
 
             max_allowed_tokens = AVAILABLE_MODELS[model]['context_tokens'] - 500
             max_tokens = st.slider(
@@ -144,8 +145,9 @@ def main():
             else:
                 ai_prompt = generate_detailed_user_prompt()
 
+            # Add selected hidden prompts to the AI prompt
             if selected_hidden_prompts:
-                ai_prompt += "\n\nIncorporate the following hidden prompts into your generated prompts:\n"
+                ai_prompt += "\n\nIncorporate the following hidden prompts:\n"
                 for prompt_name in selected_hidden_prompts:
                     ai_prompt += f"- {hidden_prompts[prompt_name]}\n"
 
@@ -246,7 +248,7 @@ def main():
         2. Choose an AI model
         3. Set the number of prompts you want
         4. Adjust the creativity level
-        5. Optionally select a template and hidden prompts
+        5. Optionally select a template, enter a custom template, or choose hidden prompts
         6. Generate your custom prompts!
 
         ### Features:
