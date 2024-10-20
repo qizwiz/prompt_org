@@ -66,7 +66,7 @@ def user_interface():
     st.title("🧠 Custom Prompt Generator")
 
     st.markdown("""
-    Welcome to the **Custom Prompt Generator**! Generate creative and detailed prompts tailored to your needs.
+    Welcome to the **Custom Prompt Generator**! Generate creative and detailed prompts tailored to your needs. More at information can be found at bottalks.promtasticworld.com https://youtu.be/N6Lvx4G9SLM v1.0.0
     """)
 
     # Initialize session state for generated prompts
