@@ -1,85 +1,100 @@
 import streamlit as st
-import pandas as pd
 import requests
+import json
+import pandas as pd
+import logging
 import os
 import base64
-import json
-import logging
-from utils import process_csv, process_json, generate_html_content, AVAILABLE_MODELS
+from utils import generate_html_content, AVAILABLE_MODELS
 
-logging.basicConfig(level=logging.DEBUG)
+# Set up logging
+logging.basicConfig(
+    filename='app.log',
+    level=logging.DEBUG,
+    format='%(asctime)s:%(levelname)s:%(message)s'
+)
 
 def parse_ai_response(response_text):
+    """
+    Parse the AI response from JSON or extract JSON objects from text.
+    """
     try:
-        # Attempt to parse the entire response as JSON
-        data = json.loads(response_text)
-        if isinstance(data, list):
-            return data
+        parsed_data = json.loads(response_text)
+        if isinstance(parsed_data, list):
+            return parsed_data
     except json.JSONDecodeError:
-        pass
-
-    # If parsing as JSON fails, try to extract JSON-like structures
-    import re
-    json_like = re.findall(r'\{(?:[^{}]|(?R))*\}', response_text)
-    if json_like:
+        import re
+        # Find all JSON objects in the response text
+        json_objects = re.findall(r'\{.*?\}', response_text, re.DOTALL)
         parsed_data = []
-        for item in json_like:
+        for obj in json_objects:
             try:
-                parsed_item = json.loads(item)
-                if all(key in parsed_item for key in ["Letter", "PromptName", "Categories", "PromptText"]):
-                    parsed_data.append(parsed_item)
+                parsed_obj = json.loads(obj)
+                # Check for required keys
+                if all(key in parsed_obj for key in ['Letter', 'PromptName', 'Categories', 'PromptText']):
+                    parsed_data.append(parsed_obj)
             except json.JSONDecodeError:
                 continue
-        return parsed_data
+    return parsed_data
 
-    return None
-
-def load_existing_prompts():
+def load_data():
     try:
-        return pd.read_pickle('prompt_data.pkl')
+        with open('prompt_data.pkl', 'rb') as f:
+            data = pd.read_pickle(f)
+        logging.info(f"Loaded data with {len(data)} prompts")
+        return data
     except FileNotFoundError:
+        logging.warning("prompt_data.pkl not found. Creating new DataFrame.")
         return pd.DataFrame(columns=["Categories", "PromptName", "PromptText", "Model"])
 
 def main():
-    st.set_page_config(page_title="Custom Prompt Generator", page_icon="🤖", layout="wide")
-    st.title("🤖 Custom Prompt Generator")
+    st.set_page_config(page_title="Custom Prompt Generator", page_icon="🧠")
 
-    # Initialize session state for generated prompts
-    if 'generated_prompts' not in st.session_state:
-        st.session_state.generated_prompts = []
+    # Sidebar Navigation
+    st.sidebar.title("Navigation")
+    page = st.sidebar.selectbox("Go to", ["User Interface", "Admin Interface", "About"])
 
-    # Load existing prompts
-    existing_prompts = load_existing_prompts()
-
-    # Sidebar navigation
-    page = st.sidebar.selectbox("Navigation", ["Generate Prompts", "About"])
-
-    if page == "Generate Prompts":
-        generate_prompts_page(existing_prompts)
+    if page == "User Interface":
+        user_interface()
+    elif page == "Admin Interface":
+        st.header("🔒 Admin Interface")
+        st.info("Please navigate to the Admin Interface page to access admin features.")
     elif page == "About":
         about_page()
 
-def generate_prompts_page(existing_prompts):
-    st.header("Generate Custom Prompts")
+def user_interface():
+    st.title("🧠 Custom Prompt Generator")
 
+    st.markdown("""
+    Welcome to the **Custom Prompt Generator**! Generate creative and detailed prompts tailored to your needs. More at information can be found at bottalks.promtasticworld.com https://youtu.be/N6Lvx4G9SLM v1.0.0
+    """)
+
+    # Initialize session state for generated prompts
+    if "generated_prompts" not in st.session_state:
+        st.session_state.generated_prompts = []
+
+    # Load existing prompts
+    existing_prompts = load_data()
+    logging.debug(f"Loaded existing prompts: {existing_prompts.to_dict('records')}")
+
+    # Input form for prompt details
     with st.form(key='prompt_form'):
         # Add category selection
-        all_categories = set(cat.strip() for cats in existing_prompts['Categories'].fillna('').str.split(',') for cat in cats if cat.strip())
+        all_categories = set(cat.strip() for cats in existing_prompts['Categories'] for cat in cats.split(',') if cats)
         categories = [""] + sorted(all_categories)
         selected_category = st.selectbox("Select Category", categories)
         logging.debug(f"All categories: {categories}")
         logging.debug(f"Selected category: {selected_category}")
 
-        # Update prompt name selection based on selected category
+        # Update prompt name selection
         if selected_category:
-            mask = existing_prompts['Categories'].fillna('').str.split(',').apply(lambda x: selected_category in [cat.strip() for cat in x])
-            prompt_names = existing_prompts[mask]['PromptName'].tolist()
+            prompt_names = existing_prompts[existing_prompts['Categories'].str.contains(selected_category, case=False, na=False)]['PromptName'].tolist()
             logging.debug(f"Filtered prompts for category '{selected_category}': {prompt_names}")
         else:
             prompt_names = existing_prompts['PromptName'].tolist()
             logging.debug(f"All prompts (no category selected): {prompt_names}")
 
-        prompt_names = [""] + sorted(set(prompt_names))
+        prompt_names = [""] + sorted(prompt_names)
         selected_prompt = st.selectbox("Select Prompt", prompt_names)
         logging.debug(f"Selected prompt: {selected_prompt}")
 
