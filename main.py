@@ -19,6 +19,7 @@ def parse_ai_response(response_text):
             return parsed_data
     except json.JSONDecodeError:
         # If parsing the entire response fails, try to find and parse individual JSON objects
+        import re
         json_objects = re.findall(r'\{[^{}]*\}', response_text)
         parsed_data = []
         for obj in json_objects:
