@@ -60,44 +60,35 @@ def admin_interface():
 
     with st.expander("➕ Add New Template"):
         template_name = st.text_input("Template Name")
-        template_content = st.text_area("Template Content (use {subject} and {input} as placeholders)")
-        category = st.text_input("Category")
+        template_content = st.text_area("Template Content (use {subject} as a placeholder)")
         if st.button("Add Template"):
-            if template_name and template_content and category:
-                if "{subject}" in template_content and "{input}" in template_content:
-                    st.session_state.templates[template_name] = {
-                        "content": template_content,
-                        "category": category
-                    }
+            if template_name and template_content:
+                if "{subject}" in template_content:
+                    st.session_state.templates[template_name] = template_content
                     save_templates()
                     st.success(f"Template '{template_name}' added.")
                 else:
-                    st.error("Template content must include both {subject} and {input} placeholders.")
+                    st.error("Template content must include the {subject} placeholder.")
             else:
-                st.error("Please provide a template name, content, and category.")
+                st.error("Please provide a template name and content.")
 
     if st.session_state.templates:
         with st.expander("✏️ Edit Existing Templates"):
             selected_template = st.selectbox("Select a template to edit", list(st.session_state.templates.keys()))
             new_name = st.text_input("New Template Name", value=selected_template)
-            new_content = st.text_area("New Template Content", value=st.session_state.templates[selected_template]["content"])
-            new_category = st.text_input("New Category", value=st.session_state.templates[selected_template]["category"])
+            new_content = st.text_area("New Template Content", value=st.session_state.templates[selected_template])
             if st.button("Update Template"):
-                if new_name and new_content and new_category:
-                    if "{subject}" in new_content and "{input}" in new_content:
+                if new_name and new_content:
+                    if "{subject}" in new_content:
                         del st.session_state.templates[selected_template]
-                        st.session_state.templates[new_name] = {
-                            "content": new_content,
-                            "category": new_category
-                        }
+                        st.session_state.templates[new_name] = new_content
                         save_templates()
                         st.success(f"Template '{new_name}' updated.")
                     else:
-                        st.error("Template content must include both {subject} and {input} placeholders.")
+                        st.error("Template content must include the {subject} placeholder.")
                 else:
-                    st.error("Please provide a new name, content, and category.")
+                    st.error("Please provide a new name and content.")
 
-    if st.session_state.templates:
         with st.expander("🗑️ Delete Templates"):
             templates_to_delete = st.multiselect("Select templates to delete", list(st.session_state.templates.keys()))
             if st.button("Delete Selected Templates"):
@@ -124,14 +115,6 @@ def main():
 
         if "generated_prompts" not in st.session_state:
             st.session_state.generated_prompts = []
-        if "hidden_prompts" not in st.session_state:
-            st.session_state.hidden_prompts = [
-                "Write a story about a time traveler who accidentally changes a major historical event.",
-                "Describe a world where humans can communicate telepathically with animals.",
-                "Create a dialogue between two AI systems debating the nature of consciousness.",
-                "Imagine a society where aging has been cured, and explore its implications.",
-                "Design a futuristic city that's entirely sustainable and eco-friendly."
-            ]
 
         load_templates()
 
@@ -159,12 +142,6 @@ def main():
             available_templates = list(st.session_state.templates.keys())
             selected_template = st.selectbox("Select a template", ["None"] + available_templates)
 
-            selected_hidden_prompts = st.multiselect(
-                "Select hidden prompts:",
-                st.session_state.hidden_prompts,
-                format_func=lambda x: x[:50] + "..." if len(x) > 50 else x
-            )
-
             max_allowed_tokens = AVAILABLE_MODELS[model]['context_tokens'] - 500
             max_tokens = st.slider(
                 "**Max Tokens:**",
@@ -184,13 +161,6 @@ def main():
             )
             submit_button = st.form_submit_button(label='Generate Prompts')
 
-        custom_prompt = st.text_input("Enter a custom prompt:")
-        if st.button("Add Custom Prompt"):
-            if custom_prompt:
-                st.session_state.hidden_prompts.append(custom_prompt)
-                st.success("Custom prompt added successfully!")
-                st.rerun()
-
         if submit_button:
             if not topic:
                 st.warning("Please enter a topic.")
@@ -198,14 +168,9 @@ def main():
 
             if selected_template != "None":
                 template = st.session_state.templates[selected_template]
-                ai_prompt = template["content"].format(subject=topic, input=topic)
+                ai_prompt = template.format(subject=topic)
             else:
                 ai_prompt = generate_detailed_user_prompt()
-
-            if selected_hidden_prompts:
-                ai_prompt += f"\n\n**Additional Instructions:**\nIncorporate the following hidden prompts into your generated prompts, adapting them to fit the main topic '{topic}':\n"
-                for idx, hidden_prompt in enumerate(selected_hidden_prompts, 1):
-                    ai_prompt += f"{idx}. {hidden_prompt}\n"
 
             ai_prompt += f"\nGenerate the {num_prompts} prompts now."
 
@@ -303,13 +268,13 @@ def main():
         2. Choose an AI model
         3. Set the number of prompts you want
         4. Adjust the creativity level
-        5. Optionally select hidden prompts
+        5. Optionally select a template
         6. Generate your custom prompts!
 
         ### Features:
         - Multiple AI models to choose from
         - Adjustable creativity settings
-        - Hidden prompts for additional inspiration
+        - Custom prompt templates
         - Export options (CSV and HTML)
         - Categorized prompts for easy organization
 
