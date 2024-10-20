@@ -7,7 +7,10 @@ import os
 def load_data():
     try:
         with open('prompt_data.pkl', 'rb') as f:
-            return pd.read_pickle(f)
+            data = pd.read_pickle(f)
+        if isinstance(data, dict):
+            return pd.DataFrame.from_dict(data, orient='index')
+        return data
     except FileNotFoundError:
         return pd.DataFrame(columns=["Letter", "PromptName", "Categories", "PromptText"])
 
