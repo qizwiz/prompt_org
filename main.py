@@ -13,7 +13,6 @@ logging.basicConfig(level=logging.DEBUG)
 def parse_ai_response(response_text):
     logging.debug(f"Parsing AI response: {response_text}")
     try:
-        # Try parsing the entire response as JSON
         parsed_data = json.loads(response_text)
         if isinstance(parsed_data, list):
             return parsed_data
@@ -21,7 +20,6 @@ def parse_ai_response(response_text):
             raise ValueError("Parsed data is not a list")
     except json.JSONDecodeError:
         logging.debug("Failed to parse entire response as JSON, trying alternative methods")
-        # If that fails, try to extract JSON-like structures
         json_like = re.findall(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', response_text)
         if json_like:
             try:
@@ -31,7 +29,6 @@ def parse_ai_response(response_text):
             except json.JSONDecodeError:
                 logging.debug("Failed to parse JSON-like structures")
         
-        # If all else fails, fall back to simple text-based parsing
         prompts = []
         lines = response_text.split('\n')
         for line in lines:
@@ -41,7 +38,7 @@ def parse_ai_response(response_text):
                     prompt = {
                         'Letter': parts[0].strip()[0],
                         'PromptName': parts[0].strip(),
-                        'Categories': 'General',  # Default category
+                        'Categories': 'General',
                         'PromptText': parts[1].strip()
                     }
                     prompts.append(prompt)
@@ -52,17 +49,16 @@ def main():
     st.set_page_config(page_title="Prompt Generator", page_icon="🤖", layout="wide")
     st.title("🤖 Prompt Generator")
 
-    # Initialize session state for generated_prompts
     if "generated_prompts" not in st.session_state:
         st.session_state.generated_prompts = []
 
     with st.sidebar:
         st.header("Configuration")
         model = st.selectbox("Select Model", list(AVAILABLE_MODELS.keys()))
-        num_prompts = st.number_input("Number of Prompts", min_value=1, max_value=10, value=3)
+        num_prompts = st.number_input("Number of Prompts", min_value=1, max_value=20, value=3)
         topic = st.text_input("Topic")
         creativity = st.slider("Creativity", min_value=0.0, max_value=1.0, value=0.7, step=0.1)
-        max_tokens = st.number_input("Max Tokens", min_value=50, max_value=500, value=150, step=10)
+        max_tokens = st.number_input("Max Tokens", min_value=50, max_value=1000, value=150, step=10)
         submit_button = st.button("Generate Prompts")
 
     if submit_button:

@@ -21,27 +21,22 @@ def process_csv(df: pd.DataFrame, has_image_url: bool, upload_option: str) -> Li
         }
         required_columns = ["Letter", "PersonaName", "Categories", "ImageURL", "PromptText"]
 
-    # Rename columns based on mapping
     df = df.rename(columns=column_mapping)
 
-    # Ensure all required columns are present
     for col in required_columns:
         if col not in df.columns:
-            df[col] = ""  # Add missing columns with empty strings
+            df[col] = ""
 
-    # Data Validation
     required_fields_for_validation = ["Letter", "Categories", "PromptText"]
     if has_image_url:
         required_fields_for_validation.extend(["PersonaName", "ImageURL"])
     else:
         required_fields_for_validation.append("PromptName")
 
-    # Check for missing values in required fields
     if df[required_fields_for_validation].isnull().values.any():
         missing = df[required_fields_for_validation].isnull().sum()
         raise ValueError(f"Missing values in required columns: {missing}")
 
-    # Convert DataFrame to list of dictionaries
     return df[required_columns].to_dict("records")
 
 def process_json(data: List[Dict], has_image_url: bool, upload_option: str) -> List[Dict]:
@@ -75,7 +70,6 @@ def process_json(data: List[Dict], has_image_url: bool, upload_option: str) -> L
 
         processed_data.append(processed_item)
 
-    # Data Validation
     required_keys_for_validation = ["Letter", "Categories", "PromptText"]
     if has_image_url:
         required_keys_for_validation.extend(["PersonaName", "ImageURL"])
@@ -89,37 +83,28 @@ def process_json(data: List[Dict], has_image_url: bool, upload_option: str) -> L
     return processed_data
 
 def generate_html_content(data: List[Dict], has_image_url: bool, theme: str, header_title: str) -> str:
-    """Generate HTML content from the processed data."""
-    # Precompute variables for the HTML content
     css_styles = get_css_styles()
     search_column_0 = 'Persona Name' if has_image_url else 'Letter'
-    search_column_2 = 2  # Categories/Tags column
-    search_column_3 = 3  # Prompt Text column
+    search_column_2 = 2
+    search_column_3 = 3
 
-    # Start building the HTML content using f-strings
     html_content = f"""
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <title>{header_title}</title>
-    <!-- Responsive Design -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- Include Bootstrap CSS for Responsive Design -->
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-    <!-- Include Google Fonts -->
     <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:400,700&display=swap">
     <style>
         {css_styles}
     </style>
 </head>
 <body>
-    <!-- Main Heading -->
     <h1 class="main-heading">{header_title}</h1>
-    <!-- Search and Filters -->
     <div class="search-bar">
         <input type="text" id="searchInput" onkeyup="searchTable()" placeholder="Search..." class="form-control">
-        <!-- Advanced Search -->
         <select id="searchColumn" class="form-control">
             <option value="all">All Columns</option>
             <option value="0">{search_column_0}</option>
@@ -127,23 +112,17 @@ def generate_html_content(data: List[Dict], has_image_url: bool, theme: str, hea
             <option value="{search_column_3}">Prompt Text</option>
         </select>
     </div>
-    <!-- Navigation -->
     <nav id="navigation">
-        <!-- Alphabet Navigation -->
 """
-    # Generate alphabetical navigation with letters that have entries
     letters = sorted(set(item['Letter'].upper() for item in data if item['Letter']))
     for letter in letters:
         html_content += f'<a href="#section-{letter}">{letter}</a> '
 
-    # Categories Button
     html_content += '<button type="button" data-toggle="modal" data-target="#categoriesModal">Categories</button>\n'
     html_content += '</nav>\n'
 
-    # Start Content Sections
-    html_content += '<!-- Content Sections -->\n<div id="content">\n'
+    html_content += '<div id="content">\n'
 
-    # Group data by letters
     data_by_letter = {}
     for item in data:
         letter = item['Letter'].upper()
@@ -151,9 +130,8 @@ def generate_html_content(data: List[Dict], has_image_url: bool, theme: str, hea
             data_by_letter[letter] = []
         data_by_letter[letter].append(item)
 
-    # Generate content for each letter with entries
-    entry_id = 1  # For unique IDs
-    categories_dict = {}  # For categories modal
+    entry_id = 1
+    categories_dict = {}
 
     for letter in letters:
         html_content += f'<div class="letter-section" id="section-{letter}"><h2>{letter}</h2>\n'
@@ -162,7 +140,6 @@ def generate_html_content(data: List[Dict], has_image_url: bool, theme: str, hea
         <thead>
             <tr>
     '''
-        # Determine headers based on the upload option
         if has_image_url:
             headers = ['Persona Name', 'Image', 'Categories/Tags', 'Prompt Text', 'Copy Prompt']
         else:
@@ -190,13 +167,11 @@ def generate_html_content(data: List[Dict], has_image_url: bool, theme: str, hea
             categories = item.get('Categories', '')
             prompt_text = item.get('PromptText', '').replace('\n', '<br>')
             categories_list = [cat.strip() for cat in categories.split(',') if cat.strip()]
-            # Update categories_dict
             for category in categories_list:
                 if category not in categories_dict:
                     categories_dict[category] = []
                 categories_dict[category].append({'id': f'entry-{entry_id}', 'name': name_field})
 
-            # Sanitize prompt_text
             prompt_text = prompt_text.replace("fucked", "****")
 
             html_content += f'''
@@ -217,7 +192,6 @@ def generate_html_content(data: List[Dict], has_image_url: bool, theme: str, hea
                     html_content += ', '
             html_content += '</td>\n'
             html_content += f'    <td>{prompt_text}</td>\n'
-            # Adjusted copyText function call to handle special characters
             sanitized_prompt_text = item.get("PromptText", "").replace("`", "\\`").replace("\\", "\\\\").replace("\n", "\\n").replace("fucked", "****")
             html_content += f'    <td><button class="btn btn-primary copy-button" onclick="copyText(`{sanitized_prompt_text}`)">Copy</button></td>\n'
             html_content += '</tr>\n'
@@ -230,9 +204,7 @@ def generate_html_content(data: List[Dict], has_image_url: bool, theme: str, hea
     '''
         html_content += '</div>'
 
-    # Categories Modal
     html_content += r'''
-    <!-- Categories Modal -->
     <div class="modal fade" id="categoriesModal" tabindex="-1" role="dialog" aria-labelledby="categoriesModalLabel" aria-hidden="true">
       <div class="modal-dialog modal-dialog-scrollable" role="document">
         <div class="modal-content">
@@ -245,12 +217,10 @@ def generate_html_content(data: List[Dict], has_image_url: bool, theme: str, hea
           <div class="modal-body">
             <ul class="category-list" id="categoryList">
     '''
-    # List of Categories
     for category in sorted(categories_dict.keys()):
         html_content += f'<li><a href="#" onclick="showEntriesByCategory(`{category}`);">{category}</a></li>'
     html_content += '''
             </ul>
-            <!-- Entries by Category -->
             <div id="entriesByCategory" style="display:none;">
               <h5 id="selectedCategory"></h5>
               <ul class="entry-list" id="entryList">
@@ -264,20 +234,15 @@ def generate_html_content(data: List[Dict], has_image_url: bool, theme: str, hea
         </div>
       </div>
     </div>
-    <!-- End of Categories Modal -->
     '''
 
-    # Include scripts
     html_content += '''
 </div>
-<!-- Include jQuery and Bootstrap JS -->
 <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.min.js"></script>
 <script>
-    // Data structures for categories and entries
     var categories = {};
 '''
-    # Generate JavaScript categories object
     categories_js = 'categories = {\n'
     for category, entries in categories_dict.items():
         categories_js += f'    "{category}": [\n'
@@ -289,7 +254,6 @@ def generate_html_content(data: List[Dict], has_image_url: bool, theme: str, hea
     categories_js += '};\n'
     html_content += categories_js
 
-    # Add JavaScript functions
     html_content += '''
     function copyText(text) {
         navigator.clipboard.writeText(text)
@@ -352,7 +316,6 @@ def generate_html_content(data: List[Dict], has_image_url: bool, theme: str, hea
         rows.forEach(function(row) {
             tbody.appendChild(row);
         });
-        // Toggle sort direction
         header.classList.toggle('asc', !ascending);
         header.classList.toggle('desc', ascending);
     }
@@ -371,13 +334,11 @@ def generate_html_content(data: List[Dict], has_image_url: bool, theme: str, hea
             a.addEventListener('click', function(e) {
                 e.preventDefault();
                 $('#categoriesModal').modal('hide');
-                // Wait for the modal to fully hide, then scroll
                 $('#categoriesModal').on('hidden.bs.modal', function () {
                     var target = document.getElementById(entry.id);
                     if (target) {
                         target.scrollIntoView({ behavior: 'smooth' });
                     }
-                    // Remove the event listener to prevent it from firing multiple times
                     $('#categoriesModal').off('hidden.bs.modal');
                 });
             });
@@ -386,7 +347,7 @@ def generate_html_content(data: List[Dict], has_image_url: bool, theme: str, hea
         });
         document.getElementById('categoryList').style.display = 'none';
         document.getElementById('modalTitle').innerText = 'Entries in ' + category;
-        $('#categoriesModal').modal('show'); // Ensure the modal is shown
+        $('#categoriesModal').modal('show');
     }
 
     function backToCategories() {
@@ -401,7 +362,6 @@ def generate_html_content(data: List[Dict], has_image_url: bool, theme: str, hea
     return html_content
 
 def get_css_styles() -> str:
-    """Return CSS styles as per the provided HTML."""
     css_styles = '''
     body {
         font-family: 'Roboto', sans-serif;
@@ -473,7 +433,6 @@ def get_css_styles() -> str:
         margin-bottom: 30px;
         color: #007bff;
     }
-    /* Additional Styling */
     .category-tags {
         font-size: 0.9em;
         color: #007bff;
@@ -486,15 +445,12 @@ def get_css_styles() -> str:
     .category-tags a:hover {
         text-decoration: underline;
     }
-    /* Highlight for Search */
     .highlight {
         background-color: yellow;
     }
-    /* Smooth Scrolling */
     html {
         scroll-behavior: smooth;
     }
-    /* Modal Styling */
     .modal-content {
         color: #333;
     }
@@ -515,11 +471,16 @@ def get_css_styles() -> str:
     '''
     return css_styles
 
-# Dictionary of available models
 AVAILABLE_MODELS = {
     "GPT-3.5 Turbo": "openai/gpt-3.5-turbo",
     "GPT-4": "openai/gpt-4",
     "Claude 2": "anthropic/claude-2",
     "PaLM 2 Chat": "google/palm-2-chat-bison",
     "Llama 2 70B": "meta-llama/llama-2-70b-chat",
+    "Mistral 7B": "mistralai/mistral-7b-instruct",
+    "Mixtral 8x7B": "mistralai/mixtral-8x7b-instruct",
+    "Gemini Pro": "google/gemini-pro",
+    "Claude 3 Opus": "anthropic/claude-3-opus",
+    "Claude 3 Sonnet": "anthropic/claude-3-sonnet",
+    "GPT-4 Turbo": "openai/gpt-4-turbo-preview",
 }
