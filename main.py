@@ -75,21 +75,18 @@ def user_interface():
 
     # Input form for prompt details
     with st.form(key='prompt_form'):
-        topic = st.text_input(
-            "**Topic:**",
-            placeholder="e.g., AI, Quantum Computing, Climate Change",
-            help="Enter the main topic for the prompts."
-        )
-
-        # Add dropdown for category selection
+        # Add category selection
         categories = sorted(set(cat for cats in existing_prompts['Categories'] for cat in cats.split(',')))
-        selected_category = st.selectbox("Select Category (Optional)", [""] + categories, index=0)
+        selected_category = st.selectbox("Select Category", [""] + categories)
 
-        # Add dropdown for prompt name selection (only show if category is selected)
+        # Add prompt name selection (only show if category is selected)
         prompt_names = []
         if selected_category:
             prompt_names = existing_prompts[existing_prompts['Categories'].str.contains(selected_category)]['PromptName'].tolist()
-        selected_prompt = st.selectbox("Select Prompt (Optional)", [""] + prompt_names, index=0)
+        selected_prompt = st.selectbox("Select Prompt", [""] + prompt_names, disabled=not selected_category)
+
+        # Disable topic input if a prompt is selected
+        topic = st.text_input("Topic:", disabled=selected_prompt != "")
 
         model = st.selectbox(
             "**Select AI Model:**",
@@ -133,7 +130,7 @@ def user_interface():
         else:
             openrouter_api_key = os.getenv('OPENROUTER_API_KEY')
 
-        submit_button = st.form_submit_button(label='Generate Prompts')
+        submit_button = st.form_submit_button(label='Generate Prompts', disabled=not (selected_prompt or topic))
 
     if submit_button:
         if selected_prompt:
