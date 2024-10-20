@@ -64,7 +64,7 @@ def generate_prompts_page(existing_prompts):
 
     with st.form(key='prompt_form'):
         # Add category selection
-        all_categories = set(cat.strip() for cats in existing_prompts['Categories'] for cat in cats.split(',') if cats)
+        all_categories = set(cat.strip() for cats in existing_prompts['Categories'].str.split(',').explode() if cats.strip())
         categories = [""] + sorted(all_categories)
         selected_category = st.selectbox("Select Category", categories)
         logging.debug(f"All categories: {categories}")
@@ -72,13 +72,14 @@ def generate_prompts_page(existing_prompts):
 
         # Update prompt name selection
         if selected_category:
-            prompt_names = existing_prompts[existing_prompts['Categories'].str.contains(selected_category, case=False, na=False)]['PromptName'].tolist()
+            mask = existing_prompts['Categories'].str.split(',').apply(lambda x: selected_category in [cat.strip() for cat in x])
+            prompt_names = existing_prompts[mask]['PromptName'].tolist()
             logging.debug(f"Filtered prompts for category '{selected_category}': {prompt_names}")
         else:
             prompt_names = existing_prompts['PromptName'].tolist()
             logging.debug(f"All prompts (no category selected): {prompt_names}")
 
-        prompt_names = [""] + sorted(prompt_names)
+        prompt_names = [""] + sorted(set(prompt_names))
         selected_prompt = st.selectbox("Select Prompt", prompt_names)
         logging.debug(f"Selected prompt: {selected_prompt}")
 
