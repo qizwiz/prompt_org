@@ -67,6 +67,7 @@ def main():
         if "generated_prompts" not in st.session_state:
             st.session_state.generated_prompts = []
 
+        # Load templates before form creation
         templates = load_templates()
 
         with st.form(key='prompt_form'):
@@ -90,6 +91,7 @@ def main():
                 help="Specify how many prompts you want to generate."
             )
 
+            # Update template selection dropdown
             available_templates = list(templates.keys())
             selected_template = st.selectbox("Select a template", ["None"] + available_templates)
 
@@ -124,8 +126,8 @@ def main():
             if user_template:
                 ai_prompt = user_template.format(subject=topic)
             elif selected_template != "None":
-                template = templates[selected_template]
-                ai_prompt = template.format(subject=topic)
+                template_content = templates[selected_template]
+                ai_prompt = template_content.format(subject=topic)
             else:
                 ai_prompt = generate_detailed_user_prompt()
 
