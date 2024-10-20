@@ -13,49 +13,84 @@ logging.basicConfig(filename='app.log', level=logging.INFO, format='%(asctime)s:
 def parse_ai_response(response_text):
     try:
         # Attempt to parse the entire response as JSON
-        return json.loads(response_text)
+        parsed_data = json.loads(response_text)
+        if isinstance(parsed_data, list):
+            return parsed_data
     except json.JSONDecodeError:
-        # If that fails, try to find and parse individual JSON objects
-        import re
-        json_objects = re.findall(r'\{(?:[^{}]|(?R))*\}', response_text)
-        parsed_objects = []
+        # If parsing the entire response fails, try to find and parse individual JSON objects
+        json_objects = re.findall(r'\{[^{}]*\}', response_text)
+        parsed_data = []
         for obj in json_objects:
             try:
-                parsed_objects.append(json.loads(obj))
+                parsed_obj = json.loads(obj)
+                if all(key in parsed_obj for key in ['Letter', 'PromptName', 'Categories', 'PromptText']):
+                    parsed_data.append(parsed_obj)
             except json.JSONDecodeError:
-                continue  # Skip invalid JSON objects
-        return parsed_objects
+                continue
+    return parsed_data
 
 def main():
     st.set_page_config(page_title="Custom Prompt Generator", page_icon="🧠")
-    st.title("🧠 Custom Prompt Generator")
 
+    # Sidebar Navigation
     st.sidebar.title("Navigation")
-    page = st.sidebar.radio("Go to", ["Home", "About"])
+    page = st.sidebar.selectbox("Go to", ["User Interface", "Admin Interface", "About"])
 
-    if page == "Home":
+    if page == "User Interface":
+        st.title("🧠 Custom Prompt Generator")
+
         st.markdown("""
         Welcome to the **Custom Prompt Generator**! Generate creative and detailed prompts tailored to your needs.
         """)
 
+        # Initialize session state for generated prompts
+        if "generated_prompts" not in st.session_state:
+            st.session_state.generated_prompts = []
+
+        # Input form for prompt details
         with st.form(key='prompt_form'):
-            topic = st.text_input("Enter a topic or subject for the prompts:", help="e.g., Artificial Intelligence, Climate Change, Space Exploration")
-            model = st.selectbox("Select AI Model", list(AVAILABLE_MODELS.keys()))
-            num_prompts = st.number_input("Number of Prompts", min_value=1, max_value=20, value=3, step=1)
-            creativity = st.slider("Creativity", min_value=0.0, max_value=1.0, value=0.7, step=0.1)
-            max_tokens = st.number_input("Max Tokens", min_value=50, max_value=1000, value=150, step=10)
-            submit_button = st.button("Generate Prompts")
+            topic = st.text_input(
+                "**Topic:**",
+                placeholder="e.g., AI, Quantum Computing, Climate Change",
+                help="Enter the main topic for the prompts."
+            )
+            model = st.selectbox(
+                "**Select AI Model:**",
+                list(AVAILABLE_MODELS.keys()),
+                help="Choose the AI model to generate prompts."
+            )
+            num_prompts = st.number_input(
+                "**Number of Prompts:**",
+                min_value=1,
+                max_value=20,
+                value=5,
+                step=1,
+                help="Specify how many prompts you want to generate."
+            )
+            max_tokens = st.slider(
+                "**Max Tokens:**",
+                min_value=50,
+                max_value=500,
+                value=200,
+                step=50,
+                help="Set the maximum number of tokens for each prompt."
+            )
+            creativity = st.slider(
+                "**Creativity Level:**",
+                min_value=0.0,
+                max_value=1.0,
+                value=0.7,
+                step=0.1,
+                help="Adjust the creativity of the generated prompts."
+            )
+            submit_button = st.form_submit_button(label='Generate Prompts')
 
         if submit_button:
             if not topic:
                 st.warning("Please enter a topic.")
                 return
 
-            prompt = f"""Generate {num_prompts} unique and creative prompts about {topic}. Each prompt should be engaging and thought-provoking. For each prompt, provide:
-            1. A single letter identifier (A-Z) that best represents the prompt's theme or content.
-            2. A concise and relevant prompt name.
-            3. A list of 2-3 relevant categories or tags for the prompt, separated by commas.
-            4. The actual prompt text.
+            prompt = f"""Generate {num_prompts} unique and creative prompts about {topic}. Each prompt should be engaging and thought-provoking.
 
             Format the output as a list of JSON objects, each containing 'Letter', 'PromptName', 'Categories', and 'PromptText' fields. Ensure that the letter and prompt name are closely related to the prompt's content.
 
@@ -120,28 +155,33 @@ def main():
             href = f'<a href="data:file/csv;base64,{b64}" download="generated_prompts.csv">Download CSV File</a>'
             st.markdown(href, unsafe_allow_html=True)
 
-            generate_html = st.button("🖥️ Generate HTML")
-            if generate_html:
-                try:
-                    logging.info("Generate HTML button clicked")
-                    logging.info(f"Generating HTML content for {len(st.session_state.generated_prompts)} prompts")
-                    
-                    header_title = "Generated Prompts"
-                    theme = "light"
-                    html_content = generate_html_content(st.session_state.generated_prompts, has_image_url=False, theme=theme, header_title=header_title)
+            with st.form(key='generate_html_form'):
+                generate_html = st.form_submit_button("🖥️ Generate HTML")
+                if generate_html:
+                    try:
+                        logging.info("Generate HTML button clicked")
+                        logging.info(f"Generating HTML content for {len(st.session_state.generated_prompts)} prompts")
+                        
+                        header_title = "Generated Prompts"
+                        theme = "light"
+                        html_content = generate_html_content(st.session_state.generated_prompts, has_image_url=False, theme=theme, header_title=header_title)
 
-                    logging.info(f"HTML content generated successfully. Length: {len(html_content)}")
+                        logging.info(f"HTML content generated successfully. Length: {len(html_content)}")
 
-                    b64 = base64.b64encode(html_content.encode()).decode()
-                    href = f'<a href="data:text/html;base64,{b64}" download="{header_title}.html">📥 Download Generated HTML</a>'
-                    st.markdown(href, unsafe_allow_html=True)
+                        b64 = base64.b64encode(html_content.encode()).decode()
+                        href = f'<a href="data:text/html;base64,{b64}" download="{header_title}.html">📥 Download Generated HTML</a>'
+                        st.markdown(href, unsafe_allow_html=True)
 
-                    st.markdown(f"<h3>Generated HTML Preview:</h3>", unsafe_allow_html=True)
-                    st.components.v1.html(html_content, height=600, scrolling=True)
-                    logging.info("HTML content displayed successfully")
-                except Exception as e:
-                    logging.error(f"Error generating or displaying HTML content: {str(e)}")
-                    st.error(f"An error occurred while generating the HTML content: {str(e)}")
+                        st.markdown(f"<h3>Generated HTML Preview:</h3>", unsafe_allow_html=True)
+                        st.components.v1.html(html_content, height=600, scrolling=True)
+                        logging.info("HTML content displayed successfully")
+                    except Exception as e:
+                        logging.error(f"Error generating or displaying HTML content: {str(e)}")
+                        st.error(f"An error occurred while generating the HTML content: {str(e)}")
+
+    elif page == "Admin Interface":
+        st.header("🔒 Admin Interface")
+        st.warning("Admin interface not implemented yet.")
 
     elif page == "About":
         st.markdown("""
