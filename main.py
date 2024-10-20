@@ -70,7 +70,7 @@ def generate_prompts_page(existing_prompts):
         logging.debug(f"All categories: {categories}")
         logging.debug(f"Selected category: {selected_category}")
 
-        # Update prompt name selection
+        # Update prompt name selection based on selected category
         if selected_category:
             mask = existing_prompts['Categories'].fillna('').str.split(',').apply(lambda x: selected_category in [cat.strip() for cat in x])
             prompt_names = existing_prompts[mask]['PromptName'].tolist()
