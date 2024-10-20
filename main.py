@@ -8,26 +8,28 @@ import base64
 from utils import generate_html_content, AVAILABLE_MODELS
 
 # Set up logging
-logging.basicConfig(filename='app.log', level=logging.INFO,
+logging.basicConfig(filename='app.log', level=logging.DEBUG,  # Set to DEBUG level
                     format='%(asctime)s:%(levelname)s:%(message)s')
 
 def parse_ai_response(response_text):
-    try:
-        parsed_data = json.loads(response_text)
-        if isinstance(parsed_data, list):
-            return parsed_data
-    except json.JSONDecodeError:
-        import re
-        json_objects = re.findall(r'\{[^{}]+?\}', response_text, re.DOTALL)
-        parsed_data = []
-        for obj in json_objects:
-            try:
-                parsed_obj = json.loads(obj)
-                if all(key in parsed_obj for key in ['Letter', 'PromptName', 'Categories', 'PromptText']):
-                    parsed_data.append(parsed_obj)
-            except json.JSONDecodeError:
-                continue
-    return parsed_data
+    import json
+    import re
+
+    # Use regular expression to extract JSON array
+    json_match = re.search(r'$$\s*\{.*\}\s*$$', response_text, re.DOTALL)
+    if json_match:
+        json_text = json_match.group()
+        try:
+            parsed_data = json.loads(json_text)
+            if isinstance(parsed_data, list):
+                return parsed_data
+        except json.JSONDecodeError as e:
+            logging.error(f"JSON decoding error: {e}")
+            st.error(f"JSON decoding error: {e}")
+    else:
+        logging.error("No JSON array found in the AI's response.")
+        st.error("No JSON array found in the AI's response.")
+    return None
 
 def main():
     st.set_page_config(page_title="Custom Prompt Generator", page_icon="🧠")
@@ -40,33 +42,52 @@ def main():
         st.title("🧠 Custom Prompt Generator")
 
         st.markdown("""
-        Welcome to the **Custom Prompt Generator**! Generate creative and detailed prompts tailored to your needs.
+        Welcome to the **Custom Prompt Generator**! Generate creative and detailed prompts with ease.
         """)
 
         # Initialize session state for generated prompts
         if "generated_prompts" not in st.session_state:
             st.session_state.generated_prompts = []
 
-        # Input form for prompt details
-        with st.form(key='prompt_form'):
-            topic = st.text_input(
-                "**Topic:**",
-                placeholder="e.g., AI, Quantum Computing, Climate Change",
-                help="Enter the main topic for the prompts."
-            )
+        # Check if prompt types exist
+        if "prompt_templates" in st.session_state and st.session_state.prompt_templates:
+            types = list(set([pt['type'] for pt in st.session_state.prompt_templates]))
+            selected_type = st.selectbox("**Type of Prompt:**", types)
+            names = [pt['name'] for pt in st.session_state.prompt_templates if pt['type'] == selected_type]
+            selected_name = st.selectbox("**Prompt Name:**", names)
+
+            # Find the selected prompt template
+            selected_prompt = next((pt for pt in st.session_state.prompt_templates if pt['type'] == selected_type and pt['name'] == selected_name), None)
+
+            if selected_prompt:
+                # Display required input fields based on the placeholders in the template
+                placeholders = selected_prompt.get('placeholders', [])
+                user_inputs = {}
+                with st.form(key='user_input_form'):
+                    for placeholder in placeholders:
+                        user_input = st.text_input(f"**{placeholder.capitalize()}:**", placeholder=f"Enter {placeholder}")
+                        user_inputs[placeholder] = user_input
+                    submit_button = st.form_submit_button(label='Generate Prompts')
+            else:
+                st.error("The selected prompt does not have a valid template.")
+                return
+
+        else:
+            st.info("No prompt templates available. Please contact the administrator.")
+            return
+
+        if 'submit_button' in locals() and submit_button:
+            missing_inputs = [key for key, value in user_inputs.items() if not value]
+            if missing_inputs:
+                st.warning(f"Please provide inputs for: {', '.join(missing_inputs)}")
+                return
+
+            # Input form for additional details
             model = st.selectbox(
                 "**Select AI Model:**",
                 list(AVAILABLE_MODELS.keys()),
                 format_func=lambda x: f"{x} (Context tokens: {AVAILABLE_MODELS[x]['context_tokens']})",
                 help="Choose the AI model to generate prompts."
-            )
-            num_prompts = st.number_input(
-                "**Number of Prompts:**",
-                min_value=1,
-                max_value=20,
-                value=10,
-                step=1,
-                help="Specify how many prompts you want to generate."
             )
 
             max_allowed_tokens = AVAILABLE_MODELS[model]['context_tokens'] - 500
@@ -86,49 +107,13 @@ def main():
                 step=0.1,
                 help="Adjust the creativity of the generated prompts."
             )
-            submit_button = st.form_submit_button(label='Generate Prompts')
 
-        if submit_button:
-            if not topic:
-                st.warning("Please enter a topic.")
+            # Format the AI prompt using the template and user inputs
+            try:
+                ai_prompt = selected_prompt['template'].format(**user_inputs)
+            except KeyError as e:
+                st.error(f"Missing placeholder in template: {e}. Please contact the administrator.")
                 return
-
-            ai_prompt = f"""
-You are an advanced AI language model designed to generate creative and engaging writing prompts.
-
-**Task:** You are an AI prompt generator. Your task is to generate a creative and detailed prompt based on the following user request:
-
-- **Subject**: {topic}
-- **Details**: Consider all aspects of the subject and create a useful, creative prompt that can be used to instruct any AI model. Ensure the prompt is clear, structured, and includes all necessary details, without adding any extra commentary or fluff. Generate {num_prompts} unique, long, and detailed writing prompts about the topic '{topic}'. Each prompt should be engaging, thought-provoking, and provide enough context to inspire in-depth responses from the reader.
-
-**Requirements:**
-- **Letter**: The first letter of the 'PromptName'.
-- **PromptName**: A catchy and relevant title for the prompt starting with the specified 'Letter'.
-- **Categories**: A comma-separated list of categories or tags related to the prompt (e.g., "Science Fiction, Ethics, Technology").
-- **PromptText**: A detailed description of the prompt, containing rich context, background information, and an intriguing scenario or question.
-
-**Format:** Provide the output as a JSON array of objects. Ensure that the JSON is properly formatted without any syntax errors.
-
-**Example Output:**
-
-[
-  {{
-    "Letter": "A",
-    "PromptName": "Alternate Realities",
-    "Categories": "Parallel Universe, Choices, Consequences",
-    "PromptText": "In a world where every choice creates a new reality, a scientist discovers a way to traverse these alternate universes. As they explore the myriad outcomes of their own life choices, they face the dilemma of altering realities for personal gain. Write about the ethical and emotional challenges that come with this newfound power, and the impact on their sense of self."
-  }},
-  ...
-]
-
-**Instructions:**
-- Do not include any introductory or concluding text.
-- Only provide the JSON array as the output.
-- Ensure diversity in the prompts to cover different subtopics and perspectives related to '{topic}'.
-- Each prompt should be self-contained and provide enough detail to fully understand the scenario.
-
-Generate the {num_prompts} prompts now.
-"""
 
             try:
                 response = requests.post(
@@ -152,16 +137,19 @@ Generate the {num_prompts} prompts now.
 
                 if "choices" in result and len(result["choices"]) > 0:
                     generated_text = result["choices"][0]["message"]["content"].strip()
-                    logging.debug(f"Generated text: {generated_text}")
+                    logging.debug(f"AI's raw response: {generated_text}")
+                    st.write("AI's raw response:")
+                    st.write(generated_text)  # Display the AI's response for debugging
+
                     generated_prompts = parse_ai_response(generated_text)
 
                     if not generated_prompts:
-                        st.error("Failed to parse the generated prompts. Please try again.")
+                        st.error("Failed to parse the generated prompts. Please check the AI's response.")
                         return
 
                     st.subheader("Generated Prompts:")
                     for idx, item in enumerate(generated_prompts, 1):
-                        st.write(f"**{idx}. {item['PromptName']}** ({item['Categories']}):\n{item['PromptText']}\n")
+                        st.write(f"**{idx}. {item.get('PromptName', 'No Name')}** ({item.get('Categories', '')}):\n{item.get('PromptText', '')}\n")
 
                     st.session_state.generated_prompts = generated_prompts
                 else:
@@ -210,28 +198,72 @@ Generate the {num_prompts} prompts now.
 
     elif page == "Admin Interface":
         st.header("🔒 Admin Interface")
-        st.warning("Admin interface not implemented yet.")
+
+        # Initialize session state for prompt templates
+        if "prompt_templates" not in st.session_state:
+            st.session_state.prompt_templates = []
+
+        # Input form for creating new prompt types and prompt names
+        with st.form(key='admin_form'):
+            prompt_type = st.text_input("Type of Prompt", placeholder="e.g., Story Idea")
+            prompt_name = st.text_input("Prompt Name", placeholder="e.g., Mystery Story Starter")
+            prompt_template = st.text_area(
+                "Prompt Template",
+                placeholder="Enter the AI prompt template. Use placeholders like {topic}, {style}, etc.",
+                help="""Define the template to be used to generate prompts.
+                Use placeholders that will be filled by user input. For example: {topic}, {audience}, etc."""
+            )
+            submit_admin = st.form_submit_button("Add Prompt")
+
+        if submit_admin:
+            if prompt_type and prompt_name and prompt_template:
+                # Extract placeholders from the template
+                import re
+                placeholders = re.findall(r'{(.*?)}', prompt_template)
+                new_prompt = {
+                    "type": prompt_type,
+                    "name": prompt_name,
+                    "template": prompt_template,
+                    "placeholders": placeholders
+                }
+                st.session_state.prompt_templates.append(new_prompt)
+                st.success(f"Added new prompt: Type '{prompt_type}', Name '{prompt_name}'.")
+            else:
+                st.warning("Please enter Type of Prompt, Prompt Name, and Prompt Template.")
+
+        # Display existing prompt templates
+        st.subheader("Existing Prompt Templates")
+        if st.session_state.prompt_templates:
+            for idx, prompt in enumerate(st.session_state.prompt_templates):
+                st.write(f"**{idx + 1}. Type:** {prompt['type']}, **Name:** {prompt['name']}")
+                st.code(prompt['template'], language='plaintext')
+                # Option to delete prompts
+                if st.button(f"Delete Prompt {idx + 1}", key=f"delete_{idx}"):
+                    st.session_state.prompt_templates.pop(idx)
+                    st.experimental_rerun()
+        else:
+            st.info("No prompt templates added yet.")
 
     elif page == "About":
         st.markdown("""
         ## About the Custom Prompt Generator
 
-        This application uses advanced AI models to generate creative and engaging prompts based on your input. It's designed to help writers, educators, and creatives overcome writer's block and spark new ideas.
+        This application uses advanced AI models to generate creative and engaging prompts based on your selection. It's designed to help users who may not be comfortable creating prompts themselves.
 
         ### How it works:
-        1. Enter a topic or subject
-        2. Choose an AI model
-        3. Set the number of prompts you want
-        4. Adjust the creativity level
-        5. Generate your custom prompts!
+        1. Select the type and name of the prompt you want to generate.
+        2. Provide minimal required input as prompted (e.g., a topic).
+        3. Choose an AI model and adjust settings if desired.
+        4. Generate your custom prompts with ease!
 
         ### Features:
-        - Multiple AI models to choose from
-        - Adjustable creativity settings
-        - Export options (CSV and HTML)
-        - Categorized prompts for easy organization
+        - Predefined prompt types and names for easy selection.
+        - Minimal input required from the user.
+        - Adjustable AI model settings.
+        - Export options (CSV and HTML).
+        - Categorized prompts for easy organization.
 
-        Enjoy using the Custom Prompt Generator for your creative projects!
+        Enjoy using the Custom Prompt Generator to spark your creativity!
         """)
 
 if __name__ == "__main__":
