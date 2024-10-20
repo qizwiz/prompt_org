@@ -1,3 +1,4 @@
+
 import streamlit as st
 import requests
 import json
@@ -57,6 +58,7 @@ def main():
             model = st.selectbox(
                 "**Select AI Model:**",
                 list(AVAILABLE_MODELS.keys()),
+                format_func=lambda x: f"{x} (Context tokens: {AVAILABLE_MODELS[x]['context_tokens']})",
                 help="Choose the AI model to generate prompts."
             )
             num_prompts = st.number_input(
@@ -70,8 +72,8 @@ def main():
             max_tokens = st.slider(
                 "**Max Tokens:**",
                 min_value=50,
-                max_value=500,
-                value=200,
+                max_value=min(500, AVAILABLE_MODELS[model]['context_tokens']),
+                value=min(200, AVAILABLE_MODELS[model]['context_tokens']),
                 step=50,
                 help="Set the maximum number of tokens for each prompt."
             )
@@ -114,7 +116,7 @@ def main():
                         "Authorization": f"Bearer {os.getenv('OPENROUTER_API_KEY')}",
                     },
                     json={
-                        "model": AVAILABLE_MODELS[model],
+                        "model": AVAILABLE_MODELS[model]['id'],
                         "messages": [
                             {"role": "user", "content": prompt}
                         ],
