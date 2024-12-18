@@ -1,9 +1,9 @@
-app.log
 .cache/
-.env
 .local/
-.upm/
-__pycache__/
-build/
 venv/
-tests/
+/replit_zip_error_log.txt
+/build/
+/.env
+/.upm/
+/__pycache__/
+/tests/__pycache__/
